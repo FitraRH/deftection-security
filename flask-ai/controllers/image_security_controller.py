@@ -1,6 +1,5 @@
-# controllers/image_security_controller.py - Fixed Version
 """
-Image Security Controller - Fixed with all required methods
+Image Security Controller - FIXED to support both file upload and JSON base64
 """
 
 import json
@@ -24,7 +23,6 @@ try:
     )
     CONFIG_AVAILABLE = True
 except ImportError:
-    # Fallback configuration if config import fails
     print("Warning: Could not import config, using fallback values")
     CONFIG_AVAILABLE = False
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -50,7 +48,7 @@ except ImportError:
 
 
 class ImageSecurityController:
-    """Complete Image Security Controller with all required methods"""
+    """FIXED Image Security Controller - Supports both file upload and JSON base64"""
     
     def __init__(self):
         """Initialize controller with proper error handling"""
@@ -63,12 +61,12 @@ class ImageSecurityController:
         if SERVICE_AVAILABLE and ImageSecurityService:
             try:
                 self.service = ImageSecurityService()
-                print("✅ ImageSecurityService initialized successfully")
+                print("ImageSecurityService initialized successfully")
             except Exception as e:
-                print(f"❌ Failed to initialize ImageSecurityService: {e}")
+                print(f"Failed to initialize ImageSecurityService: {e}")
                 self.service = None
         else:
-            print("❌ ImageSecurityService not available")
+            print("ImageSecurityService not available")
             self.service = None
         
         # Statistics tracking
@@ -85,7 +83,6 @@ class ImageSecurityController:
     def health_check(self) -> Tuple[Dict[str, Any], int]:
         """Health check endpoint"""
         try:
-            # Basic health check
             health_status = {
                 'status': 'healthy',
                 'timestamp': datetime.now().isoformat(),
@@ -93,7 +90,6 @@ class ImageSecurityController:
                 'version': '2.0.0'
             }
             
-            # Check service availability
             if self.service:
                 try:
                     service_info = self.service.get_service_info()
@@ -106,22 +102,21 @@ class ImageSecurityController:
                 health_status['service_status'] = 'not_available'
                 health_status['service_error'] = 'ImageSecurityService not initialized'
             
-            # Add configuration info
             health_status['configuration'] = {
                 'max_file_size_mb': self.MAX_FILE_SIZE // (1024 * 1024),
                 'allowed_extensions': list(self.ALLOWED_EXTENSIONS),
                 'scan_types': ['light', 'full'],
                 'debug_mode': DEBUG_MODE,
                 'config_available': CONFIG_AVAILABLE,
-                'service_available': SERVICE_AVAILABLE
+                'service_available': SERVICE_AVAILABLE,
+                'input_formats': ['form-data (file)', 'JSON (image_base64)']  # NEW
             }
             
-            # Determine overall status
             if health_status['service_status'] == 'operational':
                 return health_status, 200
             else:
                 health_status['status'] = 'degraded'
-                return health_status, 200  # Still return 200 for health checks
+                return health_status, 200
                 
         except Exception as e:
             error_response = {
@@ -132,72 +127,8 @@ class ImageSecurityController:
             }
             return error_response, 500
     
-    def get_scanner_stats(self) -> Tuple[Dict[str, Any], int]:
-        """Get scanner statistics - FIXED: Added missing method"""
-        try:
-            uptime = datetime.now() - self.stats['start_time']
-            
-            # Calculate rates
-            total_scans = self.stats['scans_performed']
-            scans_per_hour = total_scans / max(uptime.total_seconds() / 3600, 1)
-            
-            stats_response = {
-                'status': 'success',
-                'timestamp': datetime.now().isoformat(),
-                'statistics': {
-                    'uptime': {
-                        'seconds': int(uptime.total_seconds()),
-                        'hours': round(uptime.total_seconds() / 3600, 2),
-                        'start_time': self.stats['start_time'].isoformat()
-                    },
-                    'performance': {
-                        'total_scans': total_scans,
-                        'files_processed': self.stats['files_processed'],
-                        'threats_detected': self.stats['threats_detected'],
-                        'scans_per_hour': round(scans_per_hour, 2),
-                        'last_scan_time': self.stats['last_scan_time']
-                    },
-                    'scan_types': self.stats['scan_types'].copy(),
-                    'risk_distribution': self.stats['risk_levels'].copy(),
-                    'service_status': {
-                        'service_available': self.service is not None,
-                        'config_available': CONFIG_AVAILABLE,
-                        'scan_capabilities': {
-                            'hash_checking': True,
-                            'exif_analysis': self.service is not None,
-                            'basic_validation': True,
-                            'entropy_analysis': True
-                        }
-                    }
-                }
-            }
-            
-            # Add service-specific stats if available
-            if self.service:
-                try:
-                    service_info = self.service.get_service_info()
-                    stats_response['statistics']['service_info'] = {
-                        'version': service_info.get('version', 'unknown'),
-                        'mode': service_info.get('mode', 'unknown'),
-                        'features': service_info.get('features', {}),
-                        'malware_hashes_loaded': service_info.get('malware_hashes_loaded', 0)
-                    }
-                except Exception as e:
-                    stats_response['statistics']['service_error'] = str(e)
-            
-            return stats_response, 200
-            
-        except Exception as e:
-            error_response = {
-                'status': 'error',
-                'error': f"Statistics retrieval failed: {str(e) if DETAILED_ERRORS else 'Internal error'}",
-                'timestamp': datetime.now().isoformat(),
-                'error_code': self.ERROR_CODES['INTERNAL_ERROR']
-            }
-            return error_response, 500
-    
     def scan_image(self, request) -> Tuple[Dict[str, Any], int]:
-        """Main image scanning endpoint"""
+        """Main image scanning endpoint - FIXED to support both formats"""
         start_time = datetime.now()
         
         try:
@@ -208,8 +139,8 @@ class ImageSecurityController:
                     status_code=503
                 )
             
-            # Parse request and validate
-            file_data, filename, is_full_scan, validation_error = self._parse_scan_request(request)
+            # Parse request and validate - FIXED
+            file_data, filename, is_full_scan, validation_error = self._parse_scan_request_fixed(request)
             
             if validation_error:
                 return validation_error
@@ -248,7 +179,7 @@ class ImageSecurityController:
             )
     
     def scan_image_laravel(self, request) -> Tuple[Dict[str, Any], int]:
-        """Laravel-compatible image scanning endpoint"""
+        """Laravel-compatible image scanning endpoint - FIXED"""
         start_time = datetime.now()
         
         try:
@@ -259,8 +190,8 @@ class ImageSecurityController:
                     status_code=503
                 )
             
-            # Parse request and validate (same as original)
-            file_data, filename, is_full_scan, validation_error = self._parse_scan_request(request)
+            # Parse request and validate - FIXED to support both formats
+            file_data, filename, is_full_scan, validation_error = self._parse_scan_request_fixed(request)
             
             if validation_error:
                 # Convert error to Laravel format
@@ -271,7 +202,7 @@ class ImageSecurityController:
             # Update stats
             self._update_scan_stats(is_full_scan)
             
-            # Perform scan using service (same as original)
+            # Perform scan using service
             scan_result = self.service.scan_file(file_data, filename, is_full_scan)
             
             # Update stats with results
@@ -298,6 +229,159 @@ class ImageSecurityController:
                 error_code=self.ERROR_CODES['INTERNAL_ERROR'],
                 status_code=500
             )
+
+    def _parse_scan_request_fixed(self, request) -> Tuple[bytes, str, bool, Dict[str, Any]]:
+        """FIXED: Parse and validate scan request - supports both file upload and JSON base64"""
+        try:
+            file_data = None
+            filename = None
+            is_full_scan = False
+            
+            print(f"Request content type: {request.content_type}")
+            print(f"Request method: {request.method}")
+            
+            # Method 1: Handle JSON requests (base64 encoded images) - PRIORITY
+            if request.is_json or 'application/json' in str(request.content_type):
+                try:
+                    json_data = request.get_json()
+                    print(f"JSON data keys: {list(json_data.keys()) if json_data else 'None'}")
+                    
+                    if not json_data:
+                        return None, None, False, self._error_response(
+                            "Invalid JSON request",
+                            self.ERROR_CODES['INVALID_FILE_TYPE'],
+                            400
+                        )
+                    
+                    # Extract base64 image - support multiple field names
+                    image_base64 = (json_data.get('image_base64') or 
+                                  json_data.get('image') or 
+                                  json_data.get('file_base64') or
+                                  json_data.get('data'))
+                    
+                    filename = json_data.get('filename', 'uploaded_image.jpg')
+                    is_full_scan = json_data.get('is_full_scan', False)
+                    
+                    if not image_base64:
+                        return None, None, False, self._error_response(
+                            "Missing image data field. Use 'image_base64', 'image', 'file_base64', or 'data'",
+                            self.ERROR_CODES['INVALID_FILE_TYPE'],
+                            400
+                        )
+                    
+                    # Decode base64 data
+                    try:
+                        # Handle data URI format (data:image/jpeg;base64,...)
+                        if isinstance(image_base64, str) and ',' in image_base64:
+                            image_base64 = image_base64.split(',')[1]
+                        
+                        file_data = base64.b64decode(image_base64)
+                        print(f"Decoded base64 data: {len(file_data)} bytes")
+                        
+                    except Exception as e:
+                        return None, None, False, self._error_response(
+                            f"Invalid base64 image data: {e}",
+                            self.ERROR_CODES['INVALID_FILE_TYPE'],
+                            400
+                        )
+                        
+                except Exception as e:
+                    print(f"JSON parsing error: {e}")
+                    return None, None, False, self._error_response(
+                        f"JSON parsing failed: {e}",
+                        self.ERROR_CODES['INVALID_FILE_TYPE'],
+                        400
+                    )
+            
+            # Method 2: Handle form data requests (file upload) - FALLBACK
+            elif request.files and 'image' in request.files:
+                print("Processing as form-data file upload")
+                
+                file_obj: FileStorage = request.files['image']
+                
+                if file_obj.filename == '':
+                    return None, None, False, self._error_response(
+                        "No file selected",
+                        self.ERROR_CODES['INVALID_FILE_TYPE'],
+                        400
+                    )
+                
+                filename = file_obj.filename
+                file_data = file_obj.read()
+                is_full_scan = request.form.get('is_full_scan', 'false').lower() == 'true'
+                
+                print(f"Form upload - filename: {filename}, size: {len(file_data)} bytes")
+            
+            # Method 3: Try alternative form field names
+            elif request.files:
+                print("Trying alternative form field names...")
+                # Try different field names
+                for field_name in ['image', 'upload', 'data']:
+                    if field_name in request.files:
+                        file_obj = request.files[field_name]
+                        if file_obj.filename != '':
+                            filename = file_obj.filename
+                            file_data = file_obj.read()
+                            is_full_scan = request.form.get('is_full_scan', 'false').lower() == 'true'
+                            print(f"Found file in field '{field_name}': {filename}")
+                            break
+                
+                if not file_data:
+                    return None, None, False, self._error_response(
+                        "No file found. Use field name 'file', 'image', 'upload', or 'data'",
+                        self.ERROR_CODES['INVALID_FILE_TYPE'],
+                        400
+                    )
+            
+            else:
+                # No valid data found
+                error_msg = "No file provided. Use either:\n"
+                error_msg += "1. JSON: {'image_base64': 'base64data', 'filename': 'image.jpg'}\n"
+                error_msg += "2. Form-data with file field named 'file', 'image', 'upload', or 'data'"
+                
+                return None, None, False, self._error_response(
+                    error_msg,
+                    self.ERROR_CODES['INVALID_FILE_TYPE'],
+                    400
+                )
+            
+            # Validate file
+            validation_result = self._validate_file_request(file_data, filename)
+            if validation_result:
+                return None, None, False, validation_result
+            
+            print(f"Successfully parsed request - filename: {filename}, size: {len(file_data)} bytes, full_scan: {is_full_scan}")
+            return file_data, filename, is_full_scan, None
+        
+        except Exception as e:
+            print(f"Request parsing error: {e}")
+            return None, None, False, self._error_response(
+                f"Request parsing failed: {str(e) if DETAILED_ERRORS else 'Invalid request'}",
+                self.ERROR_CODES['INVALID_FILE_TYPE'],
+                400
+            )
+
+    # Keep all other methods the same...
+    def _update_scan_stats(self, is_full_scan: bool):
+        """Update scan statistics"""
+        self.stats['scans_performed'] += 1
+        self.stats['files_processed'] += 1
+        self.stats['last_scan_time'] = datetime.now().isoformat()
+        
+        if is_full_scan:
+            self.stats['scan_types']['full'] += 1
+        else:
+            self.stats['scan_types']['light'] += 1
+    
+    def _update_result_stats(self, scan_result: Dict[str, Any]):
+        """Update statistics with scan results"""
+        threats_detected = scan_result.get('threats_detected', 0)
+        if threats_detected > 0:
+            self.stats['threats_detected'] += threats_detected
+        
+        risk_level = scan_result.get('risk_level', 'CLEAN')
+        if risk_level in self.stats['risk_levels']:
+            self.stats['risk_levels'][risk_level] += 1
 
     def format_laravel_response(self, scan_result: Dict[str, Any], start_time: datetime, filename: str) -> Dict[str, Any]:
         """Format response for Laravel compatibility"""
@@ -341,148 +425,6 @@ class ImageSecurityController:
                 }
             }
 
-    def _update_scan_stats(self, is_full_scan: bool):
-        """Update scan statistics"""
-        self.stats['scans_performed'] += 1
-        self.stats['files_processed'] += 1
-        self.stats['last_scan_time'] = datetime.now().isoformat()
-        
-        if is_full_scan:
-            self.stats['scan_types']['full'] += 1
-        else:
-            self.stats['scan_types']['light'] += 1
-    
-    def _update_result_stats(self, scan_result: Dict[str, Any]):
-        """Update statistics with scan results"""
-        # Update threat count
-        threats_detected = scan_result.get('threats_detected', 0)
-        if threats_detected > 0:
-            self.stats['threats_detected'] += threats_detected
-        
-        # Update risk level distribution
-        risk_level = scan_result.get('risk_level', 'CLEAN')
-        if risk_level in self.stats['risk_levels']:
-            self.stats['risk_levels'][risk_level] += 1
-
-    def _error_response_laravel(self, message: str, error_code: str, status_code: int = 400) -> Tuple[Dict[str, Any], int]:
-        """Generate Laravel-formatted error response"""
-        return {
-            'status': 'error',
-            'timestamp': datetime.now().isoformat(),
-            'data': {
-                'error_code': error_code,
-                'message': message,
-                'hash': None,
-                'status': 'error',
-                'risk_level': 'unknown',
-                'flags': ['error'],
-                'details': {'error': message},
-                'possible_attack': [],
-                'processing_time_ms': 0
-            }
-        }, status_code
-
-    def _error_response_laravel_from_original(self, original_error: Tuple[Dict[str, Any], int]) -> Tuple[Dict[str, Any], int]:
-        """Convert original error response to Laravel format"""
-        error_dict, status_code = original_error
-        
-        return {
-            'status': 'error',
-            'timestamp': datetime.now().isoformat(),
-            'data': {
-                'error_code': error_dict.get('error_code', self.ERROR_CODES['INTERNAL_ERROR']),
-                'message': error_dict.get('message', 'Unknown error'),
-                'hash': None,
-                'status': 'error',
-                'risk_level': 'unknown',
-                'flags': ['error'],
-                'details': {'error': error_dict.get('message', 'Unknown error')},
-                'possible_attack': [],
-                'processing_time_ms': 0
-            }
-        }, status_code
-    
-    def _parse_scan_request(self, request) -> Tuple[bytes, str, bool, Dict[str, Any]]:
-        """Parse and validate scan request"""
-        try:
-            file_data = None
-            filename = None
-            is_full_scan = False
-            
-            # Handle JSON requests (base64 encoded images)
-            if request.is_json:
-                json_data = request.get_json()
-                
-                if not json_data:
-                    return None, None, False, self._error_response(
-                        "Invalid JSON request",
-                        self.ERROR_CODES['INVALID_FILE_TYPE'],
-                        400
-                    )
-                
-                # Extract base64 image
-                image_base64 = json_data.get('image_base64', '')
-                filename = json_data.get('filename', 'uploaded_image.jpg')
-                is_full_scan = json_data.get('is_full_scan', False)
-                
-                if not image_base64:
-                    return None, None, False, self._error_response(
-                        "Missing image_base64 field",
-                        self.ERROR_CODES['INVALID_FILE_TYPE'],
-                        400
-                    )
-                
-                # Decode base64 data
-                try:
-                    # Handle data URI format
-                    if ',' in image_base64:
-                        image_base64 = image_base64.split(',')[1]
-                    
-                    file_data = base64.b64decode(image_base64)
-                except Exception as e:
-                    return None, None, False, self._error_response(
-                        f"Invalid base64 image data: {e}",
-                        self.ERROR_CODES['INVALID_FILE_TYPE'],
-                        400
-                    )
-            
-            # Handle form data requests (file upload)
-            else:
-                if 'file' not in request.files:
-                    return None, None, False, self._error_response(
-                        "No file provided in request",
-                        self.ERROR_CODES['INVALID_FILE_TYPE'],
-                        400
-                    )
-                
-                file_obj: FileStorage = request.files['file']
-                
-                if file_obj.filename == '':
-                    return None, None, False, self._error_response(
-                        "No file selected",
-                        self.ERROR_CODES['INVALID_FILE_TYPE'],
-                        400
-                    )
-                
-                filename = file_obj.filename
-                file_data = file_obj.read()
-                is_full_scan = request.form.get('is_full_scan', 'false').lower() == 'true'
-            
-            # Validate file
-            validation_result = self._validate_file_request(file_data, filename)
-            if validation_result:
-                return None, None, False, validation_result
-            
-            return file_data, filename, is_full_scan, None
-        
-        except Exception as e:
-            print(f"Request parsing error: {e}")
-            return None, None, False, self._error_response(
-                f"Request parsing failed: {str(e) if DETAILED_ERRORS else 'Invalid request'}",
-                self.ERROR_CODES['INVALID_FILE_TYPE'],
-                400
-            )
-    
     def _validate_file_request(self, file_data: bytes, filename: str) -> Dict[str, Any]:
         """Validate file request"""
         # Check file size
@@ -576,93 +518,130 @@ class ImageSecurityController:
             'message': message,
             'timestamp': datetime.now().isoformat()
         }, status_code
+
+    def _error_response_laravel(self, message: str, error_code: str, status_code: int = 400) -> Tuple[Dict[str, Any], int]:
+        """Generate Laravel-formatted error response"""
+        return {
+            'status': 'error',
+            'timestamp': datetime.now().isoformat(),
+            'data': {
+                'error_code': error_code,
+                'message': message,
+                'hash': None,
+                'status': 'error',
+                'risk_level': 'unknown',
+                'flags': ['error'],
+                'details': {'error': message},
+                'possible_attack': [],
+                'processing_time_ms': 0
+            }
+        }, status_code
+
+    def _error_response_laravel_from_original(self, original_error: Tuple[Dict[str, Any], int]) -> Tuple[Dict[str, Any], int]:
+        """Convert original error response to Laravel format"""
+        error_dict, status_code = original_error
+        
+        return {
+            'status': 'error',
+            'timestamp': datetime.now().isoformat(),
+            'data': {
+                'error_code': error_dict.get('error_code', self.ERROR_CODES['INTERNAL_ERROR']),
+                'message': error_dict.get('message', 'Unknown error'),
+                'hash': None,
+                'status': 'error',
+                'risk_level': 'unknown',
+                'flags': ['error'],
+                'details': {'error': error_dict.get('message', 'Unknown error')},
+                'possible_attack': [],
+                'processing_time_ms': 0
+            }
+        }, status_code
     
     def get_scanner_stats(self) -> Tuple[Dict[str, Any], int]:
-        """Get scanner statistics - FIXED: Added missing method"""
+        """Get scanner statistics"""
         try:
-            # Simple stats response
+            uptime = datetime.now() - self.stats['start_time']
+            
+            # Calculate rates
+            total_scans = self.stats['scans_performed']
+            scans_per_hour = total_scans / max(uptime.total_seconds() / 3600, 1)
+            
             stats_response = {
                 'status': 'success',
                 'timestamp': datetime.now().isoformat(),
                 'statistics': {
-                    'service_status': {
-                        'service_available': self.service is not None,
-                        'service_initialized': True
+                    'uptime': {
+                        'seconds': int(uptime.total_seconds()),
+                        'hours': round(uptime.total_seconds() / 3600, 2),
+                        'start_time': self.stats['start_time'].isoformat()
                     },
                     'performance': {
-                        'scans_performed': 0,
-                        'threats_detected': 0,
-                        'uptime': 'running'
+                        'total_scans': total_scans,
+                        'files_processed': self.stats['files_processed'],
+                        'threats_detected': self.stats['threats_detected'],
+                        'scans_per_hour': round(scans_per_hour, 2),
+                        'last_scan_time': self.stats['last_scan_time']
+                    },
+                    'scan_types': self.stats['scan_types'].copy(),
+                    'risk_distribution': self.stats['risk_levels'].copy(),
+                    'service_status': {
+                        'service_available': self.service is not None,
+                        'config_available': CONFIG_AVAILABLE,
+                        'input_formats_supported': ['form-data', 'JSON base64'],  # NEW
+                        'scan_capabilities': {
+                            'hash_checking': True,
+                            'exif_analysis': self.service is not None,
+                            'basic_validation': True,
+                            'entropy_analysis': True
+                        }
                     }
                 }
             }
             
-            # Add service info if available
+            # Add service-specific stats if available
             if self.service:
                 try:
                     service_info = self.service.get_service_info()
-                    stats_response['statistics']['service_info'] = service_info
+                    stats_response['statistics']['service_info'] = {
+                        'version': service_info.get('version', 'unknown'),
+                        'mode': service_info.get('mode', 'unknown'),
+                        'features': service_info.get('features', {}),
+                        'malware_hashes_loaded': service_info.get('malware_hashes_loaded', 0)
+                    }
                 except Exception as e:
                     stats_response['statistics']['service_error'] = str(e)
             
             return stats_response, 200
-        
+            
         except Exception as e:
-            return {
+            error_response = {
                 'status': 'error',
-                'error': str(e),
-                'timestamp': datetime.now().isoformat()
-            }, 500
+                'error': f"Statistics retrieval failed: {str(e) if DETAILED_ERRORS else 'Internal error'}",
+                'timestamp': datetime.now().isoformat(),
+                'error_code': self.ERROR_CODES['INTERNAL_ERROR']
+            }
+            return error_response, 500
 
 
 # Test function
 def test_controller():
     """Test function to verify the controller works"""
-    print("Testing ImageSecurityController...")
+    print("Testing FIXED ImageSecurityController...")
     
     try:
         # Initialize controller
         controller = ImageSecurityController()
-        print("✅ Controller initialized successfully")
+        print("Controller initialized successfully")
         
-        # Test all required methods
-        required_methods = [
-            'health_check', 
-            'scan_image', 
-            'scan_image_laravel', 
-            'get_scanner_stats',
-            'format_laravel_response'
-        ]
-        
-        for method_name in required_methods:
-            if hasattr(controller, method_name):
-                print(f"✅ {method_name} method exists")
-                
-                # Test health_check method specifically
-                if method_name == 'health_check':
-                    try:
-                        health_response, status_code = controller.health_check()
-                        print(f"✅ health_check method works - Status: {status_code}")
-                        print(f"   Response status: {health_response.get('status')}")
-                    except Exception as e:
-                        print(f"❌ health_check method failed: {e}")
-                
-                # Test get_scanner_stats method specifically
-                elif method_name == 'get_scanner_stats':
-                    try:
-                        stats_response, status_code = controller.get_scanner_stats()
-                        print(f"✅ get_scanner_stats method works - Status: {status_code}")
-                        print(f"   Total scans: {stats_response.get('statistics', {}).get('performance', {}).get('total_scans', 0)}")
-                    except Exception as e:
-                        print(f"❌ get_scanner_stats method failed: {e}")
-                        
-            else:
-                print(f"❌ {method_name} method missing")
+        # Test health check
+        health_response, status_code = controller.health_check()
+        print(f"health_check method works - Status: {status_code}")
+        print(f"   Input formats supported: {health_response.get('configuration', {}).get('input_formats', [])}")
         
         return True
         
     except Exception as e:
-        print(f"❌ Controller test failed: {e}")
+        print(f"Controller test failed: {e}")
         return False
 
 

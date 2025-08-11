@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
         "./flask-ai/models"
-    ]
+    ],
+    "postman.settings.dotenv-detection-notification-visibility": false
 }

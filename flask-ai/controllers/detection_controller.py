@@ -1,6 +1,5 @@
-# controllers/detection_controller.py - Enhanced with Desired Response Format
 """
-Detection Controller with OpenAI integration and custom response formatting
+Detection Controller FIXED - Support both form-data and JSON requests
 """
 
 from flask import jsonify
@@ -14,7 +13,7 @@ from datetime import datetime
 
 
 class DetectionController:
-    """Detection Controller with OpenAI integration and custom response format"""
+    """FIXED Detection Controller - Support both form-data and JSON requests"""
     
     def __init__(self, detection_service):
         self.detection_service = detection_service
@@ -38,7 +37,8 @@ class DetectionController:
                 'timestamp': datetime.now().isoformat(),
                 'services': status,
                 'api_version': '1.0.0',
-                'mode': 'stateless_with_openai'
+                'mode': 'stateless_with_openai',
+                'supported_content_types': ['application/json', 'multipart/form-data']  # NEW
             })
         except Exception as e:
             self.logger.error(f"Health check failed: {e}")
@@ -53,6 +53,7 @@ class DetectionController:
         try:
             info = self.detection_service.get_system_information()
             info['mode'] = 'stateless_with_openai'
+            info['supported_content_types'] = ['application/json', 'multipart/form-data']  # NEW
             
             return jsonify({
                 'status': 'success',
@@ -72,6 +73,7 @@ class DetectionController:
         try:
             status = self.detection_service.get_current_status()
             status['mode'] = 'stateless_with_openai'
+            status['supported_content_types'] = ['application/json', 'multipart/form-data']  # NEW
             
             return jsonify({
                 'status': 'success',
@@ -87,64 +89,18 @@ class DetectionController:
             }), 500
     
     def process_image(self, request):
-        """Process single image with new response format"""
+        """Process single image - FIXED to support both content types"""
         start_time = time.time()
         temp_file = None
         
         try:
-            self.logger.info(f"Processing image with OpenAI analysis - Method: {request.method}")
+            self.logger.info(f"Processing image - Method: {request.method}, Content-Type: {request.content_type}")
             
-            # Handle both form data and JSON
-            image_data = None
-            filename = None
+            # FIXED: Parse request data from both form-data and JSON
+            image_data, filename, validation_error = self._parse_image_request(request)
             
-            # Try form data first
-            if request.files and 'image' in request.files:
-                self.logger.info("Processing as form data")
-                file = request.files['image']
-                if file.filename == '':
-                    return jsonify({
-                        'status': 'error',
-                        'error': 'No file selected',
-                        'timestamp': datetime.now().isoformat()
-                    }), 400
-                
-                image_data = file.read()
-                filename = file.filename or f"upload_{int(time.time())}.jpg"
-                
-            # Try JSON data
-            elif request.json and 'image_base64' in request.json:
-                self.logger.info("Processing as JSON base64")
-                base64_data = request.json['image_base64']
-                if base64_data.startswith('data:image'):
-                    base64_data = base64_data.split(',')[1]
-                
-                try:
-                    image_data = base64.b64decode(base64_data)
-                except Exception as decode_error:
-                    return jsonify({
-                        'status': 'error',
-                        'error': f'Invalid base64 image data: {str(decode_error)}',
-                        'timestamp': datetime.now().isoformat()
-                    }), 400
-                
-                filename = request.json.get('filename', f"upload_{int(time.time())}.jpg")
-            
-            # Validate image data
-            if not image_data:
-                return jsonify({
-                    'status': 'error',
-                    'error': 'No image provided',
-                    'timestamp': datetime.now().isoformat()
-                }), 400
-            
-            # Validate file size
-            if len(image_data) > 5 * 1024 * 1024:
-                return jsonify({
-                    'status': 'error',
-                    'error': 'File too large. Maximum size is 5MB',
-                    'timestamp': datetime.now().isoformat()
-                }), 400
+            if validation_error:
+                return validation_error
             
             self.logger.info(f"Processing image - filename: {filename}, size: {len(image_data)} bytes")
             
@@ -204,23 +160,18 @@ class DetectionController:
                     self.logger.warning(f"Failed to cleanup temp file: {e}")
     
     def process_batch(self, request):
-        """Process batch with new response format"""
+        """Process batch - FIXED to support both content types"""
         start_time = time.time()
         temp_files = []
         
         try:
-            if not request.json or 'images' not in request.json:
+            # FIXED: Handle both JSON batch and form-data batch
+            images_data = self._parse_batch_request(request)
+            
+            if not images_data:
                 return jsonify({
                     'status': 'error',
                     'error': 'No images array provided',
-                    'timestamp': datetime.now().isoformat()
-                }), 400
-            
-            images_data = request.json['images']
-            if not isinstance(images_data, list) or len(images_data) == 0:
-                return jsonify({
-                    'status': 'error',
-                    'error': 'Images must be a non-empty array',
                     'timestamp': datetime.now().isoformat()
                 }), 400
             
@@ -229,16 +180,9 @@ class DetectionController:
             # Process each image
             results = []
             for i, image_item in enumerate(images_data):
-                if 'image_base64' not in image_item:
-                    continue
-                
-                base64_data = image_item['image_base64']
-                if base64_data.startswith('data:image'):
-                    base64_data = base64_data.split(',')[1]
-                
                 try:
-                    image_data = base64.b64decode(base64_data)
-                    filename = image_item.get('filename', f"batch_image_{i+1}.jpg")
+                    image_data = image_item['data']
+                    filename = image_item['filename']
                     
                     # Create temporary file
                     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
@@ -301,36 +245,20 @@ class DetectionController:
                     self.logger.warning(f"Failed to cleanup temp file: {e}")
     
     def process_frame(self, request):
-        """Process frame with new response format (optimized)"""
+        """Process frame - FIXED to support both content types"""
         start_time = time.time()
         temp_file = None
         
         try:
-            self.logger.info("Processing frame with new format (fast mode)")
+            self.logger.info(f"Processing frame - Method: {request.method}, Content-Type: {request.content_type}")
             
-            if not request.json or 'frame_base64' not in request.json:
-                return jsonify({
-                    'status': 'error',
-                    'error': 'No frame_base64 data provided',
-                    'timestamp': datetime.now().isoformat()
-                }), 400
+            # FIXED: Parse frame request from both form-data and JSON
+            frame_data, filename, fast_mode, include_annotation, validation_error = self._parse_frame_request(request)
             
-            base64_data = request.json['frame_base64']
-            if base64_data.startswith('data:image'):
-                base64_data = base64_data.split(',')[1]
+            if validation_error:
+                return validation_error
             
-            try:
-                image_data = base64.b64decode(base64_data)
-            except Exception as decode_error:
-                return jsonify({
-                    'status': 'error',
-                    'error': f'Invalid base64 frame data: {str(decode_error)}',
-                    'timestamp': datetime.now().isoformat()
-                }), 400
-            
-            filename = request.json.get('filename', f"frame_{int(time.time())}.jpg")
-            
-            if len(image_data) > 5 * 1024 * 1024:
+            if len(frame_data) > 5 * 1024 * 1024:
                 return jsonify({
                     'status': 'error',
                     'error': 'Frame too large. Maximum size is 5MB',
@@ -339,15 +267,12 @@ class DetectionController:
             
             # Create temporary file
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-            temp_file.write(image_data)
+            temp_file.write(frame_data)
             temp_file.close()
             
             # Process frame
-            fast_mode = request.json.get('fast_mode', True)
-            include_annotation = request.json.get('include_annotation', True)
-            
             result = self.detection_service.process_frame(
-                image_data, filename, temp_file.name, 
+                frame_data, filename, temp_file.name, 
                 fast_mode=fast_mode, include_annotation=include_annotation
             )
             
@@ -386,6 +311,229 @@ class DetectionController:
                 except Exception as e:
                     self.logger.warning(f"Failed to cleanup temp file: {e}")
     
+    def _parse_image_request(self, request):
+        """FIXED: Parse image request from both form-data and JSON"""
+        try:
+            image_data = None
+            filename = None
+            
+            print(f"Request content type: {request.content_type}")
+            
+            # Method 1: Handle JSON requests (base64 encoded images)
+            if request.is_json or 'application/json' in str(request.content_type):
+                json_data = request.get_json()
+                
+                if not json_data:
+                    return None, None, jsonify({
+                        'status': 'error',
+                        'error': 'Invalid JSON request',
+                        'timestamp': datetime.now().isoformat()
+                    }), 400
+                
+                # Extract base64 image
+                image_base64 = json_data.get('image_base64', '')
+                filename = json_data.get('filename', f"upload_{int(time.time())}.jpg")
+                
+                if not image_base64:
+                    return None, None, jsonify({
+                        'status': 'error',
+                        'error': 'Missing image_base64 field',
+                        'timestamp': datetime.now().isoformat()
+                    }), 400
+                
+                # Decode base64 data
+                try:
+                    if image_base64.startswith('data:image'):
+                        image_base64 = image_base64.split(',')[1]
+                    
+                    image_data = base64.b64decode(image_base64)
+                except Exception as decode_error:
+                    return None, None, jsonify({
+                        'status': 'error',
+                        'error': f'Invalid base64 image data: {str(decode_error)}',
+                        'timestamp': datetime.now().isoformat()
+                    }), 400
+            
+            # Method 2: Handle form data requests (file upload)
+            elif request.files and 'image' in request.files:
+                file = request.files['image']
+                if file.filename == '':
+                    return None, None, jsonify({
+                        'status': 'error',
+                        'error': 'No file selected',
+                        'timestamp': datetime.now().isoformat()
+                    }), 400
+                
+                image_data = file.read()
+                filename = file.filename or f"upload_{int(time.time())}.jpg"
+            
+            # Method 3: Try alternative form field names
+            elif request.files:
+                for field_name in ['file', 'upload', 'data']:
+                    if field_name in request.files:
+                        file = request.files[field_name]
+                        if file.filename != '':
+                            image_data = file.read()
+                            filename = file.filename or f"upload_{int(time.time())}.jpg"
+                            break
+            
+            # Validate image data
+            if not image_data:
+                return None, None, jsonify({
+                    'status': 'error',
+                    'error': 'No image provided. Use JSON with image_base64 or form-data with image/file field',
+                    'timestamp': datetime.now().isoformat()
+                }), 400
+            
+            # Validate file size
+            if len(image_data) > 5 * 1024 * 1024:
+                return None, None, jsonify({
+                    'status': 'error',
+                    'error': 'File too large. Maximum size is 5MB',
+                    'timestamp': datetime.now().isoformat()
+                }), 400
+            
+            return image_data, filename, None
+            
+        except Exception as e:
+            return None, None, jsonify({
+                'status': 'error',
+                'error': f'Request parsing failed: {str(e)}',
+                'timestamp': datetime.now().isoformat()
+            }), 400
+    
+    def _parse_frame_request(self, request):
+        """FIXED: Parse frame request from both form-data and JSON"""
+        try:
+            frame_data = None
+            filename = None
+            fast_mode = True
+            include_annotation = True
+            
+            # Method 1: Handle JSON requests
+            if request.is_json or 'application/json' in str(request.content_type):
+                json_data = request.get_json()
+                
+                if not json_data:
+                    return None, None, None, None, jsonify({
+                        'status': 'error',
+                        'error': 'Invalid JSON request',
+                        'timestamp': datetime.now().isoformat()
+                    }), 400
+                
+                # Extract frame data
+                frame_base64 = json_data.get('frame_base64') or json_data.get('image_base64', '')
+                filename = json_data.get('filename', f"frame_{int(time.time())}.jpg")
+                fast_mode = json_data.get('fast_mode', True)
+                include_annotation = json_data.get('include_annotation', True)
+                
+                if not frame_base64:
+                    return None, None, None, None, jsonify({
+                        'status': 'error',
+                        'error': 'Missing frame_base64 or image_base64 field',
+                        'timestamp': datetime.now().isoformat()
+                    }), 400
+                
+                # Decode base64 data
+                try:
+                    if frame_base64.startswith('data:image'):
+                        frame_base64 = frame_base64.split(',')[1]
+                    
+                    frame_data = base64.b64decode(frame_base64)
+                except Exception as decode_error:
+                    return None, None, None, None, jsonify({
+                        'status': 'error',
+                        'error': f'Invalid base64 frame data: {str(decode_error)}',
+                        'timestamp': datetime.now().isoformat()
+                    }), 400
+            
+            # Method 2: Handle form data requests
+            elif request.files:
+                # Try different field names
+                for field_name in ['frame', 'image', 'file']:
+                    if field_name in request.files:
+                        file = request.files[field_name]
+                        if file.filename != '':
+                            frame_data = file.read()
+                            filename = file.filename or f"frame_{int(time.time())}.jpg"
+                            break
+                
+                # Get form parameters
+                fast_mode = request.form.get('fast_mode', 'true').lower() == 'true'
+                include_annotation = request.form.get('include_annotation', 'true').lower() == 'true'
+            
+            if not frame_data:
+                return None, None, None, None, jsonify({
+                    'status': 'error',
+                    'error': 'No frame data provided. Use JSON with frame_base64 or form-data with frame/image/file field',
+                    'timestamp': datetime.now().isoformat()
+                }), 400
+            
+            return frame_data, filename, fast_mode, include_annotation, None
+            
+        except Exception as e:
+            return None, None, None, None, jsonify({
+                'status': 'error',
+                'error': f'Frame request parsing failed: {str(e)}',
+                'timestamp': datetime.now().isoformat()
+            }), 400
+    
+    def _parse_batch_request(self, request):
+        """FIXED: Parse batch request from both form-data and JSON"""
+        try:
+            images_data = []
+            
+            # Method 1: Handle JSON batch requests
+            if request.is_json or 'application/json' in str(request.content_type):
+                json_data = request.get_json()
+                
+                if not json_data or 'images' not in json_data:
+                    return None
+                
+                json_images = json_data['images']
+                if not isinstance(json_images, list) or len(json_images) == 0:
+                    return None
+                
+                for i, image_item in enumerate(json_images):
+                    if 'image_base64' not in image_item:
+                        continue
+                    
+                    base64_data = image_item['image_base64']
+                    if base64_data.startswith('data:image'):
+                        base64_data = base64_data.split(',')[1]
+                    
+                    try:
+                        image_data = base64.b64decode(base64_data)
+                        filename = image_item.get('filename', f"batch_image_{i+1}.jpg")
+                        
+                        images_data.append({
+                            'data': image_data,
+                            'filename': filename
+                        })
+                    except Exception:
+                        continue
+            
+            # Method 2: Handle form-data batch (multiple files)
+            elif request.files:
+                for key, file in request.files.items():
+                    if file.filename != '':
+                        try:
+                            image_data = file.read()
+                            filename = file.filename or f"batch_{key}.jpg"
+                            
+                            images_data.append({
+                                'data': image_data,
+                                'filename': filename
+                            })
+                        except Exception:
+                            continue
+            
+            return images_data if images_data else None
+            
+        except Exception as e:
+            self.logger.error(f"Batch request parsing failed: {e}")
+            return None
+    
     def get_detection_thresholds(self):
         """Get current detection thresholds"""
         try:
@@ -407,7 +555,19 @@ class DetectionController:
     def update_detection_thresholds(self, request):
         """Update detection thresholds"""
         try:
-            new_thresholds = request.json
+            # Handle both JSON and form data
+            if request.is_json:
+                new_thresholds = request.get_json()
+            else:
+                new_thresholds = request.form.to_dict()
+                # Convert string values to float for form data
+                for key, value in new_thresholds.items():
+                    if key in ['anomaly_threshold', 'defect_confidence_threshold']:
+                        try:
+                            new_thresholds[key] = float(value)
+                        except (ValueError, TypeError):
+                            pass
+            
             if not new_thresholds:
                 return jsonify({
                     'status': 'error',
@@ -446,6 +606,39 @@ class DetectionController:
                 
         except Exception as e:
             self.logger.error(f"Error updating thresholds: {e}")
+            return jsonify({
+                'status': 'error',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), 500
+            
+    def reset_detection_thresholds(self, request):
+        """Reset detection thresholds to default values"""
+        try:
+            # Reset to default thresholds
+            self.config['thresholds'] = {
+                'anomaly_threshold': 0.7,
+                'defect_confidence_threshold': 0.85
+            }
+            self.config['last_updated'] = datetime.now().isoformat()
+
+            # Update detection service with default thresholds
+            self.detection_service.update_thresholds(self.config['thresholds'])
+
+            self.logger.info("Detection thresholds reset to default values")
+
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'message': 'Thresholds reset to default values',
+                    'new_thresholds': self.config['thresholds']
+                },
+                'timestamp': datetime.now().isoformat(),
+                'mode': 'stateless_with_openai'
+            })
+
+        except Exception as e:
+            self.logger.error(f"Error resetting thresholds: {e}")
             return jsonify({
                 'status': 'error',
                 'error': str(e),

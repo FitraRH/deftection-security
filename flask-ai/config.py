@@ -25,8 +25,8 @@ ANOMALIB_MODEL_PATH = MODELS_DIR / "patchcore.pt"
 HRNET_MODEL_PATH = MODELS_DIR / "defect_segmentation_model.pth"
 
 # Detection thresholds - PRODUCTION VALUES
-ANOMALY_THRESHOLD = 0.7
-DEFECT_CONFIDENCE_THRESHOLD = 0.85
+ANOMALY_THRESHOLD = 0.3
+DEFECT_CONFIDENCE_THRESHOLD = 0.50
 
 # Device configuration
 DEVICE = 'cuda'  # or 'cpu'
