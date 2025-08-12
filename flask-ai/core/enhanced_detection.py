@@ -1,10 +1,9 @@
-# core/enhanced_detection.py - GUARANTEED DEFECT DETECTION VERSION
+# core/enhanced_detection.py - FIXED Single Defect Per Type
 """
-Enhanced detection with GUARANTEED defect detection and SINGLE bounding box per defect type
-FIXED: Always detect defects when final_decision is DEFECT
+Enhanced detection FIXED - Returns single defect per type like before
+FIXED: Only one defect entry per defect type, combined bounding box
 """
 
-# Required imports
 import cv2
 import numpy as np
 
@@ -35,14 +34,12 @@ except ImportError:
     MIN_BBOX_AREA = 100
 
 def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image_shape):
-    """GUARANTEED defect prediction analysis with SINGLE bbox per defect type"""
+    """FIXED: Enhanced defect prediction analysis with SINGLE defect per type"""
     h, w = predicted_mask.shape
     total_pixels = h * w
     
-    print(f"=== ENHANCED DETECTION DEBUG ===")
+    print(f"=== FIXED ENHANCED DETECTION ===")
     print(f"Image shape: {h}x{w} = {total_pixels} pixels")
-    print(f"Predicted mask shape: {predicted_mask.shape}")
-    print(f"Confidence scores shape: {confidence_scores.shape}")
     
     analysis = {
         'detected_defects': [],
@@ -55,7 +52,7 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
     # Track if any defects found
     any_defects_found = False
     
-    # Analyze each defect class with GUARANTEED detection
+    # Analyze each defect class with SINGLE bbox per type
     for class_id, class_name in SPECIFIC_DEFECT_CLASSES.items():
         class_mask = (predicted_mask == class_id)
         pixel_count = np.sum(class_mask)
@@ -73,46 +70,45 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
         if class_id > 0 and pixel_count > 0:
             print(f"  Processing {class_name} with {pixel_count} pixels...")
             
-            # EXTREMELY LENIENT thresholds - almost always detect
-            adaptive_threshold = 0.01  # Very low threshold (1%)
+            # LENIENT thresholds for detection
+            adaptive_threshold = 0.01  # Very low threshold
             
             confident_mask = class_mask & (confidence_scores > adaptive_threshold)
             confident_pixels = np.sum(confident_mask)
             
             print(f"  Confident pixels (>{adaptive_threshold}): {confident_pixels}")
             
-            # VERY MINIMAL requirements for detection
-            min_pixels = 1  # Just need 1 pixel!
-            
-            # GUARANTEED detection criteria - if pixels exist, detect it
+            # GUARANTEED detection criteria
             if pixel_count > 0:  # Always detect if any pixels exist
-                print(f"  ✅ DETECTING {class_name} (guaranteed detection)")
+                print(f"   DETECTING {class_name} (guaranteed detection)")
                 
                 analysis['detected_defects'].append(class_name)
                 any_defects_found = True
                 
-                # Extract SINGLE bounding box per defect type
+                # FIXED: Extract SINGLE combined bounding box per defect type
                 working_mask = confident_mask if confident_pixels > 0 else class_mask
-                single_bbox = extract_single_bounding_box(working_mask, class_name, h, w)
+                single_bbox = extract_single_combined_bounding_box(working_mask, class_name, h, w, pixel_count)
                 
                 if single_bbox:
-                    analysis['bounding_boxes'][class_name] = [single_bbox]
-                    print(f"  ✅ Created bounding box for {class_name}: {single_bbox['width']}x{single_bbox['height']}")
+                    # FIXED: Store as single bbox, not array
+                    analysis['bounding_boxes'][class_name] = [single_bbox]  # Keep array format but single item
+                    print(f"   Created SINGLE combined bounding box for {class_name}")
                 else:
-                    print(f"  ❌ Failed to create bounding box for {class_name}")
+                    print(f"   Failed to create bounding box for {class_name}")
                 
-                # Enhanced statistics
+                # Enhanced statistics for SINGLE defect
                 analysis['defect_statistics'][class_name] = {
                     'confident_pixels': int(confident_pixels if confident_pixels > 0 else pixel_count),
                     'confidence_ratio': confident_pixels / pixel_count if pixel_count > 0 else 0,
                     'avg_confidence': float(np.mean(confidence_scores[working_mask])) if np.sum(working_mask) > 0 else 0.5,
                     'max_confidence': float(np.max(confidence_scores[working_mask])) if np.sum(working_mask) > 0 else 0.5,
-                    'num_regions': 1,
+                    'num_regions': 1,  # FIXED: Always 1 region per defect type
                     'largest_region_area': single_bbox['area'] if single_bbox else pixel_count,
-                    'total_defect_area': single_bbox['area'] if single_bbox else pixel_count
+                    'total_defect_area': single_bbox['area'] if single_bbox else pixel_count,
+                    'single_defect_per_type': True  # FIXED: Mark as single defect
                 }
                 
-                # Spatial analysis
+                # Spatial analysis for SINGLE defect
                 if single_bbox:
                     analysis['spatial_analysis'][class_name] = analyze_single_defect_location(
                         single_bbox, image_shape
@@ -120,10 +116,10 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
             else:
                 print(f"  ❌ No pixels found for {class_name}")
     
-    print(f"=== DETECTION SUMMARY ===")
+    print(f"=== FIXED DETECTION SUMMARY ===")
     print(f"Detected defects: {analysis['detected_defects']}")
     print(f"Total detected: {len(analysis['detected_defects'])}")
-    print(f"Any defects found: {any_defects_found}")
+    print(f"Single defect per type: True")
     
     # FALLBACK: If no defects found but we know there should be defects
     if not any_defects_found:
@@ -145,83 +141,62 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
                     dominant_class_name = class_name
         
         if dominant_class is not None and max_pixels > 0:
-            print(f"📦 Creating fallback defect: {dominant_class_name} with {max_pixels} pixels")
+            print(f"📦 Creating SINGLE fallback defect: {dominant_class_name} with {max_pixels} pixels")
             
             analysis['detected_defects'].append(dominant_class_name)
             
-            # Create fallback bounding box
+            # Create fallback SINGLE bounding box
             class_mask = (predicted_mask == dominant_class)
-            fallback_bbox = extract_single_bounding_box(class_mask, dominant_class_name, h, w)
+            fallback_bbox = extract_single_combined_bounding_box(class_mask, dominant_class_name, h, w, max_pixels)
             
             if fallback_bbox:
-                analysis['bounding_boxes'][dominant_class_name] = [fallback_bbox]
+                analysis['bounding_boxes'][dominant_class_name] = [fallback_bbox]  # Single item array
                 
                 analysis['defect_statistics'][dominant_class_name] = {
                     'confident_pixels': max_pixels,
                     'confidence_ratio': 1.0,
                     'avg_confidence': 0.7,
                     'max_confidence': 0.8,
-                    'num_regions': 1,
+                    'num_regions': 1,  # FIXED: Single region
                     'largest_region_area': fallback_bbox['area'],
-                    'total_defect_area': fallback_bbox['area']
+                    'total_defect_area': fallback_bbox['area'],
+                    'single_defect_per_type': True
                 }
                 
                 analysis['spatial_analysis'][dominant_class_name] = analyze_single_defect_location(
                     fallback_bbox, image_shape
                 )
         else:
-            print("📦 Creating generic damaged defect as final fallback")
+            print("📦 Creating generic SINGLE damaged defect as final fallback")
             
-            # Create a generic "damaged" defect covering central area
+            # Create a SINGLE generic "damaged" defect
             analysis['detected_defects'].append('damaged')
             
-            generic_bbox = {
-                'id': 1,
-                'x': w // 4, 
-                'y': h // 4, 
-                'width': w // 2, 
-                'height': h // 2,
-                'area': (w * h) // 4,
-                'center_x': w // 2, 
-                'center_y': h // 2,
-                'centroid': (w // 2, h // 2),
-                'orientation': 0.0,
-                'aspect_ratio': 1.0,
-                'compactness': 0.8,
-                'perimeter': w + h,
-                'relative_position': {
-                    'x_percent': 50.0,
-                    'y_percent': 50.0,
-                    'quadrant': get_quadrant(w // 2, h // 2, w, h)
-                },
-                'shape_type': 'Distributed Damage',
-                'severity': 'moderate',
-                'coverage_type': 'generic',
-                'total_defect_pixels': (w * h) // 4
-            }
-            
-            analysis['bounding_boxes']['damaged'] = [generic_bbox]
+            generic_bbox = create_generic_single_bbox(w, h)
+            analysis['bounding_boxes']['damaged'] = [generic_bbox]  # Single item array
             
             analysis['defect_statistics']['damaged'] = {
                 'confident_pixels': (w * h) // 4,
                 'confidence_ratio': 1.0,
                 'avg_confidence': 0.6,
                 'max_confidence': 0.7,
-                'num_regions': 1,
+                'num_regions': 1,  # FIXED: Single region
                 'largest_region_area': generic_bbox['area'],
-                'total_defect_area': generic_bbox['area']
+                'total_defect_area': generic_bbox['area'],
+                'single_defect_per_type': True
             }
     
-    print(f"=== FINAL ANALYSIS ===")
+    print(f"=== FINAL FIXED ANALYSIS ===")
     print(f"Final detected defects: {analysis['detected_defects']}")
     print(f"Final bounding boxes: {list(analysis['bounding_boxes'].keys())}")
+    print(f"Each defect type has: 1 bounding box (FIXED)")
     
     return analysis
 
-def extract_single_bounding_box(mask, defect_type, h, w):
-    """Extract SINGLE bounding box that represents the entire defect area"""
+def extract_single_combined_bounding_box(mask, defect_type, h, w, total_pixels):
+    """FIXED: Extract SINGLE combined bounding box that represents ALL defect areas of this type"""
     try:
-        print(f"  Extracting bbox for {defect_type}...")
+        print(f"  Extracting SINGLE combined bbox for {defect_type}...")
         
         # Convert to uint8 if needed
         if mask.dtype != np.uint8:
@@ -238,7 +213,7 @@ def extract_single_bounding_box(mask, defect_type, h, w):
         
         print(f"  Found {len(x_coords)} defect pixels for {defect_type}")
         
-        # Calculate the overall bounding box for all defect pixels
+        # FIXED: Calculate SINGLE overall bounding box for ALL defect pixels of this type
         min_x, max_x = int(np.min(x_coords)), int(np.max(x_coords))
         min_y, max_y = int(np.min(y_coords)), int(np.max(y_coords))
         
@@ -246,17 +221,17 @@ def extract_single_bounding_box(mask, defect_type, h, w):
         height = max_y - min_y + 1
         area = len(x_coords)  # Actual number of defect pixels
         
-        # Calculate centroid
+        # Calculate centroid of ALL pixels
         cx = int(np.mean(x_coords))
         cy = int(np.mean(y_coords))
         
-        # Calculate shape metrics
+        # Calculate shape metrics for combined defect
         aspect_ratio = width / height if height > 0 else 1
         bbox_area = width * height
         compactness = area / bbox_area if bbox_area > 0 else 0
         perimeter = 2 * (width + height)
         
-        # Create single comprehensive bounding box
+        # Create SINGLE comprehensive bounding box for this defect type
         single_bbox = {
             'id': 1,
             'x': min_x, 
@@ -278,17 +253,48 @@ def extract_single_bounding_box(mask, defect_type, h, w):
             },
             'shape_type': classify_defect_shape(width, height, aspect_ratio, compactness, defect_type),
             'severity': calculate_defect_severity(area, defect_type, w * h),
-            'coverage_type': 'comprehensive',
-            'total_defect_pixels': area
+            'coverage_type': 'comprehensive_single',
+            'total_defect_pixels': area,
+            'combined_defect': True,  # FIXED: Mark as combined defect
+            'single_bbox_per_type': True  # FIXED: Mark as single bbox per type
         }
         
-        print(f"  ✅ Created bbox for {defect_type}: {width}x{height} at ({min_x},{min_y}) covering {area} pixels")
+        print(f"  Created SINGLE combined bbox for {defect_type}: {width}x{height} at ({min_x},{min_y}) covering {area} pixels")
         
         return single_bbox
         
     except Exception as e:
-        print(f"  ❌ Error extracting bbox for {defect_type}: {e}")
+        print(f"  Error extracting SINGLE bbox for {defect_type}: {e}")
         return None
+
+def create_generic_single_bbox(w, h):
+    """Create a generic single bounding box"""
+    return {
+        'id': 1,
+        'x': w // 4, 
+        'y': h // 4, 
+        'width': w // 2, 
+        'height': h // 2,
+        'area': (w * h) // 4,
+        'center_x': w // 2, 
+        'center_y': h // 2,
+        'centroid': (w // 2, h // 2),
+        'orientation': 0.0,
+        'aspect_ratio': 1.0,
+        'compactness': 0.8,
+        'perimeter': w + h,
+        'relative_position': {
+            'x_percent': 50.0,
+            'y_percent': 50.0,
+            'quadrant': get_quadrant(w // 2, h // 2, w, h)
+        },
+        'shape_type': 'Distributed Damage',
+        'severity': 'moderate',
+        'coverage_type': 'generic_single',
+        'total_defect_pixels': (w * h) // 4,
+        'combined_defect': True,
+        'single_bbox_per_type': True
+    }
 
 def get_quadrant(x, y, width, height):
     """Determine which quadrant of the image the defect is in"""
@@ -376,7 +382,8 @@ def analyze_single_defect_location(bbox, image_shape):
             'height_percent': (bbox['height'] / image_shape[0]) * 100,
             'area_percent': (bbox['area'] / (image_shape[0] * image_shape[1])) * 100 if len(image_shape) > 1 else 0
         },
-        'edge_proximity': analyze_edge_proximity_single(bbox, image_shape)
+        'edge_proximity': analyze_edge_proximity_single(bbox, image_shape),
+        'single_defect_analysis': True  # FIXED: Mark as single defect
     }
     
     return spatial_info
@@ -412,25 +419,7 @@ def analyze_edge_proximity_single(bbox, image_shape):
 
 # Legacy functions for backward compatibility
 def extract_enhanced_bounding_boxes(mask, defect_type):
-    """Legacy function - redirects to single bbox extraction"""
+    """Legacy function - redirects to SINGLE bbox extraction"""
     h, w = mask.shape[:2]
-    single_bbox = extract_single_bounding_box(mask, defect_type, h, w)
+    single_bbox = extract_single_combined_bounding_box(mask, defect_type, h, w, np.sum(mask))
     return [single_bbox] if single_bbox else []
-
-def analyze_spatial_distribution(mask, image_shape, bboxes):
-    """Analyze spatial distribution - simplified for single bbox"""
-    if not bboxes or len(bboxes) == 0:
-        return {}
-    bbox = bboxes[0]
-    return analyze_single_defect_location(bbox, image_shape)
-
-def analyze_distribution_pattern(bboxes, width, height):
-    """Single defect has no distribution pattern"""
-    return "Single comprehensive region"
-
-def analyze_defect_clustering(bboxes):
-    """Single defect has no clustering"""
-    return {
-        "cluster_count": 1,
-        "clusters": [{"defect_indices": [0], "size": 1}] if bboxes else []
-    }
