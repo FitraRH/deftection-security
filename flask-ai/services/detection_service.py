@@ -1,6 +1,6 @@
 """
-Detection Service with UPGRADED Real-time Frame Processing
-Enhanced with same logic as combined endpoint but optimized for real-time
+Detection Service CLEANED - Real-time Frame Processing without Mock Data
+CLEANED: Removed all mock data, fallback generation, and guaranteed detection
 """
 
 import os
@@ -14,21 +14,21 @@ from main import create_detector
 
 
 class DetectionService:
-    """Detection Service with UPGRADED Real-time Frame Processing capabilities"""
+    """CLEANED Detection Service - Real processing only, no mock data"""
     
     def __init__(self):
         self.detector = None
         self.is_initialized = False
         self.initialization_error = None
         
-        # Frame-specific optimizations cache
+        # Frame-specific optimizations cache (keep configuration)
         self.frame_cache = {
             'last_processed_time': 0,
             'consecutive_good_frames': 0,
             'model_warmup_done': False
         }
         
-        # Smart Configuration for real-time processing
+        # Smart Configuration for real-time processing (keep configuration)
         self.smart_config = {
             'smart_enabled': True,
             'anomaly_sensitivity': 'medium',
@@ -52,7 +52,7 @@ class DetectionService:
             'enable_confidence_boosting': True
         }
         
-        # In-memory configuration
+        # In-memory configuration (keep configuration)
         self.config = {
             'anomaly_threshold': 0.7,
             'defect_confidence_threshold': 0.85
@@ -65,25 +65,26 @@ class DetectionService:
         self._initialize_components()
     
     def _initialize_components(self):
-        """Initialize detection components with real-time optimizations"""
+        """Initialize detection components - requires real detector"""
         try:
-            self.logger.info("Initializing detection service with real-time frame processing...")
+            self.logger.info("Initializing CLEANED detection service...")
             
             self.detector = create_detector()
             
             if not self.detector or not self.detector.is_ready():
-                raise RuntimeError("Main detector initialization failed")
+                raise RuntimeError("Detector initialization failed or not ready")
             
             self._calculate_adaptive_thresholds()
             self._warmup_models()
             
             self.is_initialized = True
-            self.logger.info("Real-time detection service ready")
+            self.logger.info("CLEANED detection service ready")
             
         except Exception as e:
             self.initialization_error = str(e)
-            self.logger.error(f"Detection service initialization failed: {e}")
+            self.logger.error(f"CLEANED detection service initialization failed: {e}")
             self.is_initialized = False
+            raise RuntimeError(f"Detection service initialization failed: {e}")
     
     def _warmup_models(self):
         """Warmup models for faster real-time processing"""
@@ -97,14 +98,17 @@ class DetectionService:
             cv2.imwrite(temp_file.name, dummy_image)
             
             # Warmup detection pipeline
-            self.detector.detect_anomaly(temp_file.name)
+            try:
+                self.detector.detect_anomaly(temp_file.name)
+                self.frame_cache['model_warmup_done'] = True
+                self.logger.info("Model warmup completed")
+            except Exception as warmup_error:
+                self.logger.warning(f"Model warmup failed: {warmup_error}")
             
             os.unlink(temp_file.name)
-            self.frame_cache['model_warmup_done'] = True
-            self.logger.info("Model warmup completed for real-time processing")
             
         except Exception as e:
-            self.logger.warning(f"Model warmup failed: {e}")
+            self.logger.warning(f"Model warmup setup failed: {e}")
     
     def _calculate_adaptive_thresholds(self):
         """Calculate adaptive thresholds for real-time processing"""
@@ -114,14 +118,13 @@ class DetectionService:
         self.smart_config['current_anomaly_threshold'] = self.smart_config['sensitivity_thresholds']['anomaly'][anomaly_sens]
         self.smart_config['current_defect_threshold'] = self.smart_config['sensitivity_thresholds']['defect'][defect_sens]
         
-        self.logger.info(f"Real-time adaptive thresholds - Anomaly: {self.smart_config['current_anomaly_threshold']}, "
+        self.logger.info(f"Adaptive thresholds - Anomaly: {self.smart_config['current_anomaly_threshold']}, "
                         f"Defect: {self.smart_config['current_defect_threshold']}")
     
     def process_frame(self, image_data, filename, temp_file_path, fast_mode=True, include_annotation=True, 
                      use_smart_processing=True, sensitivity_level=None):
         """
-        UPGRADED: Process frame with same enhanced logic as combined endpoint
-        Optimized for real-time performance with smart processing
+        CLEANED: Process frame with REAL detection only
         """
         if not self.is_initialized:
             raise RuntimeError("Detection service not initialized")
@@ -129,7 +132,7 @@ class DetectionService:
         start_time = time.time()
         
         try:
-            self.logger.info(f"Processing real-time frame (smart: {use_smart_processing}, fast: {fast_mode}): {filename}")
+            self.logger.info(f"Processing REAL frame (smart: {use_smart_processing}, fast: {fast_mode}): {filename}")
             
             # Update sensitivity if provided
             if sensitivity_level and sensitivity_level in ['low', 'medium', 'high']:
@@ -137,11 +140,11 @@ class DetectionService:
             
             # Check if we can skip processing for consecutive good frames
             if fast_mode and self._should_skip_processing():
-                return self._create_cached_good_result(filename, start_time)
+                return self._create_skip_result(filename, start_time)
             
-            # Process with enhanced detection logic
+            # Process with REAL detection only
             if use_smart_processing and self.smart_config['smart_enabled']:
-                result = self._process_frame_with_enhanced_detection(
+                result = self._process_frame_with_real_detection(
                     image_data, filename, temp_file_path, fast_mode
                 )
             else:
@@ -149,37 +152,39 @@ class DetectionService:
                     image_data, filename, temp_file_path, fast_mode
                 )
             
-            # Apply real-time optimizations
-            if result:
-                result = self._apply_real_time_optimizations(result, fast_mode)
-                
-                # Update frame cache
-                self._update_frame_cache(result)
-                
-                # Generate annotation if requested
-                if include_annotation:
-                    annotated_base64 = self._generate_annotated_image(temp_file_path, result)
-                    if annotated_base64:
-                        result['annotated_image_base64'] = annotated_base64
-                
-                # Add real-time metadata
-                result.update({
-                    'frame_mode': True,
-                    'fast_mode': fast_mode,
-                    'real_time_processing': True,
-                    'processing_time': time.time() - start_time,
-                    'smart_processing_applied': use_smart_processing,
-                    'frame_optimizations': self.smart_config['frame_optimizations']
-                })
+            if not result:
+                raise RuntimeError("Frame processing returned no result")
             
-            self.logger.info(f"Real-time frame processed - Decision: {result.get('final_decision')} "
+            # Apply real-time optimizations
+            result = self._apply_real_time_optimizations(result, fast_mode)
+            
+            # Update frame cache
+            self._update_frame_cache(result)
+            
+            # Generate annotation if requested
+            if include_annotation:
+                annotated_base64 = self._generate_annotated_image(temp_file_path, result)
+                if annotated_base64:
+                    result['annotated_image_base64'] = annotated_base64
+            
+            # Add real-time metadata
+            result.update({
+                'frame_mode': True,
+                'fast_mode': fast_mode,
+                'real_time_processing': True,
+                'processing_time': time.time() - start_time,
+                'smart_processing_applied': use_smart_processing,
+                'frame_optimizations': self.smart_config['frame_optimizations']
+            })
+            
+            self.logger.info(f"REAL frame processed - Decision: {result.get('final_decision')} "
                            f"in {time.time() - start_time:.3f}s")
             
             return result
             
         except Exception as e:
-            self.logger.error(f"Error processing real-time frame: {e}")
-            raise
+            self.logger.error(f"Error processing REAL frame: {e}")
+            raise RuntimeError(f"Frame processing failed: {e}")
     
     def _update_sensitivity_for_frame(self, sensitivity_level):
         """Update sensitivity dynamically for frame processing"""
@@ -195,8 +200,8 @@ class DetectionService:
         threshold = self.smart_config['frame_optimizations']['skip_consecutive_good_threshold']
         return self.frame_cache['consecutive_good_frames'] >= threshold
     
-    def _create_cached_good_result(self, filename, start_time):
-        """Create cached result for skipped frames"""
+    def _create_skip_result(self, filename, start_time):
+        """Create result for skipped frames - minimal processing"""
         return {
             'final_decision': 'GOOD',
             'processing_time': time.time() - start_time,
@@ -213,70 +218,69 @@ class DetectionService:
             'consecutive_good_count': self.frame_cache['consecutive_good_frames']
         }
     
-    def _process_frame_with_enhanced_detection(self, image_data, filename, temp_file_path, fast_mode):
-        """Process frame using enhanced detection logic from combined endpoint"""
+    def _process_frame_with_real_detection(self, image_data, filename, temp_file_path, fast_mode):
+        """Process frame using REAL detection only"""
         try:
-            # Use the same process_single_image logic but with frame optimizations
-            result = self.detector.process_image(temp_file_path)
+            # Use REAL process_single_image
+            result = self.process_single_image(image_data, filename, temp_file_path, 
+                                             include_annotation=False, use_smart_processing=True)
             
             if not result:
-                return None
+                raise RuntimeError("Real detection returned no result")
             
-            # Apply enhanced detection analysis
-            result = self._apply_enhanced_frame_analysis(result, temp_file_path, fast_mode)
+            # Apply frame-specific processing
+            result = self._apply_real_frame_analysis(result, temp_file_path, fast_mode)
             
-            # Apply smart processing with frame-specific optimizations
+            # Apply smart processing if enabled
             if self.smart_config['enable_intelligent_filtering']:
                 result = self._apply_smart_processing_for_frames(result)
             
-            # Apply smart final decision with real-time considerations
+            # Apply smart final decision
             result = self._smart_final_decision_for_frames(result)
             
             return result
             
         except Exception as e:
-            self.logger.error(f"Error in enhanced frame processing: {e}")
-            return None
+            self.logger.error(f"Error in REAL frame processing: {e}")
+            raise RuntimeError(f"Real frame processing failed: {e}")
     
-    def _apply_enhanced_frame_analysis(self, result, temp_file_path, fast_mode):
-        """Apply enhanced detection analysis optimized for frames"""
+    def _apply_real_frame_analysis(self, result, temp_file_path, fast_mode):
+        """Apply real frame analysis from actual detection results"""
         try:
             # Get defect classification results
             defect_classification = result.get('defect_classification', {})
             
-            if not defect_classification:
-                return result
-            
-            # Apply enhanced detection with frame-specific optimizations
-            if 'defect_analysis' in defect_classification:
-                enhanced_analysis = defect_classification['defect_analysis']
-            else:
-                # Use enhanced detection logic
-                from core.enhanced_detection import analyze_defect_predictions_enhanced
-                
-                # Get prediction data from result
-                predicted_mask = self._extract_mask_from_result(result)
-                confidence_scores = self._extract_confidence_from_result(result)
-                
-                if predicted_mask is not None and confidence_scores is not None:
-                    image_shape = predicted_mask.shape
-                    enhanced_analysis = analyze_defect_predictions_enhanced(
-                        predicted_mask, confidence_scores, image_shape
-                    )
+            if defect_classification:
+                # Apply enhanced detection logic if available
+                if 'defect_analysis' in defect_classification:
+                    enhanced_analysis = defect_classification['defect_analysis']
+                else:
+                    # Use real enhanced detection logic
+                    from core.enhanced_detection import analyze_defect_predictions_enhanced
                     
-                    # Update result with enhanced analysis
-                    defect_classification['defect_analysis'] = enhanced_analysis
-                    result['defect_classification'] = defect_classification
-                    result['detected_defect_types'] = enhanced_analysis.get('detected_defects', [])
-            
-            # Add frame-specific enhancements
-            result['frame_enhanced_detection'] = True
-            result['guaranteed_defect_detection'] = True
+                    # Get prediction data from result
+                    predicted_mask = self._extract_mask_from_result(result)
+                    confidence_scores = self._extract_confidence_from_result(result)
+                    
+                    if predicted_mask is not None and confidence_scores is not None:
+                        image_shape = predicted_mask.shape
+                        enhanced_analysis = analyze_defect_predictions_enhanced(
+                            predicted_mask, confidence_scores, image_shape
+                        )
+                        
+                        # Update result with enhanced analysis
+                        defect_classification['defect_analysis'] = enhanced_analysis
+                        result['defect_classification'] = defect_classification
+                        result['detected_defect_types'] = enhanced_analysis.get('detected_defects', [])
+                
+                # Add frame-specific enhancements
+                result['frame_enhanced_detection'] = True
+                result['guaranteed_defect_detection'] = False  # CLEANED: No guaranteed detection
             
             return result
             
         except Exception as e:
-            self.logger.error(f"Error in enhanced frame analysis: {e}")
+            self.logger.error(f"Error in real frame analysis: {e}")
             return result
     
     def _extract_mask_from_result(self, result):
@@ -296,7 +300,7 @@ class DetectionService:
             return None
     
     def _apply_smart_processing_for_frames(self, result):
-        """Apply smart processing optimized for real-time frames"""
+        """Apply smart processing for real-time frames"""
         try:
             defect_classification = result.get('defect_classification', {})
             
@@ -311,7 +315,7 @@ class DetectionService:
             if not bounding_boxes:
                 return result
             
-            # Apply frame-optimized filtering
+            # Apply frame-optimized filtering with REAL thresholds
             filtered_boxes = {}
             filtered_stats = {}
             
@@ -319,15 +323,15 @@ class DetectionService:
                 if not boxes:
                     continue
                 
-                # Filter with frame-specific thresholds
+                # Filter with REAL thresholds only
                 filtered_type_boxes = self._filter_boxes_for_frames(boxes, defect_type)
                 
-                # Apply lightweight NMS for frames
+                # Apply NMS if enabled and needed
                 if self.smart_config['enable_nms'] and len(filtered_type_boxes) > 1:
                     filtered_type_boxes = self._apply_lightweight_nms(filtered_type_boxes)
                 
                 # Limit detections for real-time processing
-                max_detections = min(self.smart_config['max_defects_per_type'], 2)  # Reduced for frames
+                max_detections = min(self.smart_config['max_defects_per_type'], 2)
                 if len(filtered_type_boxes) > max_detections:
                     filtered_type_boxes = sorted(filtered_type_boxes, 
                                                key=lambda x: x.get('area', 0), reverse=True)[:max_detections]
@@ -356,12 +360,12 @@ class DetectionService:
             return result
     
     def _filter_boxes_for_frames(self, boxes, defect_type):
-        """Filter bounding boxes with frame-specific criteria"""
+        """Filter bounding boxes with REAL criteria only"""
         filtered_boxes = []
         
-        # More lenient thresholds for real-time processing
-        min_area_threshold = self.smart_config['min_defect_area_threshold'] * 0.5  # More lenient
-        confidence_threshold = self.smart_config['current_defect_threshold'] * 0.9  # More lenient
+        # Use REAL thresholds from config
+        min_area_threshold = self.smart_config['min_defect_area_threshold']
+        confidence_threshold = self.smart_config['current_defect_threshold']
         
         for bbox in boxes:
             area_percentage = bbox.get('area_percentage', 0)
@@ -370,16 +374,12 @@ class DetectionService:
             
             confidence = bbox.get('confidence', bbox.get('confidence_score', 0))
             
-            # Adjust threshold for critical defects in frames
-            adjusted_threshold = confidence_threshold
-            if defect_type in ['missing_component', 'damaged']:
-                adjusted_threshold *= 0.8  # Even more lenient for critical defects in frames
-            
-            if confidence >= adjusted_threshold:
-                # Frame-specific confidence boost
+            # Apply REAL threshold check
+            if confidence >= confidence_threshold:
+                # Optional confidence boost for critical defects
                 if (self.smart_config['enable_confidence_boosting'] and 
                     defect_type in ['missing_component', 'damaged']):
-                    boost_factor = self.smart_config['confidence_boost_factor'] * 1.1  # Slightly higher boost
+                    boost_factor = self.smart_config['confidence_boost_factor']
                     bbox['frame_confidence_boosted'] = True
                     bbox['original_confidence'] = confidence
                     confidence *= boost_factor
@@ -390,7 +390,7 @@ class DetectionService:
         return filtered_boxes
     
     def _apply_lightweight_nms(self, boxes):
-        """Apply lightweight NMS optimized for real-time frames"""
+        """Apply lightweight NMS for real-time frames"""
         if len(boxes) <= 1:
             return boxes
         
@@ -398,7 +398,7 @@ class DetectionService:
         boxes = sorted(boxes, key=lambda x: x.get('confidence', x.get('confidence_score', 0)), reverse=True)
         
         keep = []
-        iou_threshold = self.smart_config['nms_iou_threshold'] * 1.2  # More lenient for frames
+        iou_threshold = self.smart_config['nms_iou_threshold']
         
         for box1 in boxes:
             suppress = False
@@ -446,7 +446,7 @@ class DetectionService:
             return 0.0
     
     def _recalculate_stats_for_frames(self, boxes, original_stats):
-        """Recalculate statistics for filtered boxes in frame processing"""
+        """Recalculate statistics for filtered boxes"""
         if not boxes:
             return original_stats
         
@@ -465,22 +465,22 @@ class DetectionService:
         return new_stats
     
     def _smart_final_decision_for_frames(self, result):
-        """Make smart final decision optimized for real-time frames"""
+        """Make smart final decision for frames using REAL data"""
         try:
             anomaly_detection = result.get('anomaly_detection', {})
             anomaly_score = anomaly_detection.get('anomaly_score', 0.0)
             
-            # Use adaptive threshold with frame-specific adjustments
+            # Use adaptive threshold
             adaptive_threshold = self.smart_config['current_anomaly_threshold']
-            frame_threshold = adaptive_threshold * 0.95  # Slightly more sensitive for frames
+            frame_threshold = adaptive_threshold  # Use real threshold, no artificial adjustment
             
             detected_defects = result.get('detected_defect_types', [])
             
-            # Frame-specific decision logic
+            # REAL decision logic only
             is_anomalous_adaptive = anomaly_score > frame_threshold
             has_defects = len(detected_defects) > 0
             
-            # Critical defect check with frame optimization
+            # Critical defect check
             has_critical_defects = self._check_critical_defects_fast(result)
             
             if has_critical_defects:
@@ -489,12 +489,12 @@ class DetectionService:
             elif is_anomalous_adaptive and has_defects:
                 final_decision = 'DEFECT'
                 decision_reason = 'anomaly_and_defects_frame'
-            elif is_anomalous_adaptive and anomaly_score > (frame_threshold + 0.15):
+            elif is_anomalous_adaptive:
                 final_decision = 'DEFECT'
-                decision_reason = 'high_anomaly_frame'
+                decision_reason = 'anomaly_only_frame'
             elif has_defects:
                 final_decision = 'DEFECT'
-                decision_reason = 'defects_detected_frame'
+                decision_reason = 'defects_only_frame'
             else:
                 final_decision = 'GOOD'
                 decision_reason = 'no_issues_frame'
@@ -535,7 +535,7 @@ class DetectionService:
                 if defect_type in ['missing_component', 'damaged']:
                     for box in boxes[:1]:  # Check only first box for speed
                         area_pct = box.get('area_percentage', 0)
-                        if area_pct > 3.0:  # Lower threshold for frames
+                        if area_pct > 3.0:
                             return True
                         
             return False
@@ -551,15 +551,8 @@ class DetectionService:
                 'adaptive_quality': self.smart_config['frame_optimizations']['adaptive_quality'],
                 'model_caching': self.smart_config['frame_optimizations']['enable_model_caching'],
                 'lightweight_analysis': fast_mode,
-                'frame_threshold_adjustment': True
+                'frame_threshold_adjustment': False  # CLEANED: No artificial adjustments
             }
-            
-            # Optimize OpenAI analysis for frames if enabled
-            if result.get('anomaly_detection', {}).get('openai_analysis'):
-                result['anomaly_detection']['openai_analysis']['frame_optimized'] = True
-            
-            if result.get('defect_classification', {}).get('openai_analysis'):
-                result['defect_classification']['openai_analysis']['frame_optimized'] = True
             
             return result
             
@@ -601,45 +594,11 @@ class DetectionService:
             
         except Exception as e:
             self.logger.error(f"Error in standard frame processing: {e}")
-            return None
+            raise RuntimeError(f"Standard frame processing failed: {e}")
     
-    # Keep all existing methods from original DetectionService
-    def get_health_status(self):
-        """Get health status including real-time frame processing"""
-        from config import OPENAI_API_KEY
-        
-        base_status = {
-            'detector': {
-                'available': self.detector is not None,
-                'ready': self.detector.is_ready() if self.detector else False,
-                'status': 'operational' if self.detector and self.detector.is_ready() else 'not_ready'
-            },
-            'openai': {
-                'available': bool(OPENAI_API_KEY),
-                'status': 'operational' if OPENAI_API_KEY else 'not_configured'
-            },
-            'real_time_processing': {
-                'enabled': True,
-                'frame_optimizations': self.smart_config['frame_optimizations'],
-                'model_warmup_done': self.frame_cache['model_warmup_done'],
-                'adaptive_thresholds': True,
-                'enhanced_detection': True
-            },
-            'smart_processing': {
-                'enabled': self.smart_config['smart_enabled'],
-                'integrated': True,
-                'sensitivity_level': self.smart_config['anomaly_sensitivity'],
-                'intelligent_filtering': self.smart_config['enable_intelligent_filtering']
-            },
-            'overall_status': 'healthy' if self.is_initialized else 'degraded',
-            'initialization_error': self.initialization_error,
-            'mode': 'real_time_enhanced'
-        }
-        
-        return base_status
-    
+    # Keep existing methods for single image processing
     def process_single_image(self, image_data, filename, temp_file_path=None, include_annotation=True, use_smart_processing=False):
-        """Process single image - keeping original functionality"""
+        """Process single image - REAL processing only"""
         if not self.is_initialized:
             raise RuntimeError("Detection service not initialized")
         
@@ -656,23 +615,24 @@ class DetectionService:
             
             result = self.detector.process_image(image_path)
             
-            if result:
-                if use_smart_processing and self.smart_config['smart_enabled']:
-                    result = self._apply_integrated_smart_processing(result)
-                    result['processing_mode'] = 'smart_adaptive'
-                else:
-                    result['processing_mode'] = 'standard'
-                
-                if include_annotation:
-                    annotated_base64 = self._generate_annotated_image(image_path, result)
-                    if annotated_base64:
-                        result['annotated_image_base64'] = annotated_base64
+            if not result:
+                raise RuntimeError("Image processing returned no result")
+            
+            if use_smart_processing and self.smart_config['smart_enabled']:
+                result = self._apply_integrated_smart_processing(result)
+                result['processing_mode'] = 'smart_adaptive'
+            else:
+                result['processing_mode'] = 'standard'
+            
+            if include_annotation:
+                annotated_base64 = self._generate_annotated_image(image_path, result)
+                if annotated_base64:
+                    result['annotated_image_base64'] = annotated_base64
             
             if not temp_file_path and os.path.exists(image_path):
                 os.remove(image_path)
             
-            if result:
-                self.logger.info(f"Image processed - Decision: {result.get('final_decision')}")
+            self.logger.info(f"Image processed - Decision: {result.get('final_decision')}")
             
             return result
             
@@ -680,9 +640,8 @@ class DetectionService:
             self.logger.error(f"Error processing image: {e}")
             if not temp_file_path and 'image_path' in locals() and os.path.exists(image_path):
                 os.remove(image_path)
-            raise
+            raise RuntimeError(f"Image processing failed: {e}")
     
-    # Include other existing methods from original DetectionService...
     def _generate_annotated_image(self, image_path, result):
         """Generate annotated image"""
         try:
@@ -851,7 +810,7 @@ class DetectionService:
             return result
     
     def _filter_boxes_smart(self, boxes, defect_type):
-        """Filter bounding boxes using integrated smart criteria"""
+        """Filter bounding boxes using REAL criteria"""
         filtered_boxes = []
         
         min_area_threshold = self.smart_config['min_defect_area_threshold']
@@ -864,11 +823,8 @@ class DetectionService:
             
             confidence = bbox.get('confidence', bbox.get('confidence_score', 0))
             
-            adjusted_threshold = confidence_threshold
-            if defect_type in ['missing_component', 'damaged']:
-                adjusted_threshold *= 0.9
-            
-            if confidence >= adjusted_threshold:
+            # Apply REAL threshold only
+            if confidence >= confidence_threshold:
                 if (self.smart_config['enable_confidence_boosting'] and 
                     defect_type in ['missing_component', 'damaged'] and area_percentage > 5.0):
                     bbox['confidence_boosted'] = True
@@ -953,7 +909,7 @@ class DetectionService:
         return new_stats
     
     def _smart_final_decision_integrated(self, result):
-        """Make integrated smart final decision"""
+        """Make integrated smart final decision using REAL data only"""
         try:
             anomaly_detection = result.get('anomaly_detection', {})
             anomaly_score = anomaly_detection.get('anomaly_score', 0.0)
@@ -988,12 +944,15 @@ class DetectionService:
             elif is_anomalous_adaptive and has_significant_defects:
                 final_decision = 'DEFECT'
                 decision_reason = 'anomaly_and_defects'
-            elif is_anomalous_adaptive and anomaly_score > (adaptive_threshold + 0.2):
+            elif is_anomalous_adaptive:
                 final_decision = 'DEFECT'
                 decision_reason = 'high_anomaly_score'
             elif has_significant_defects and len(detected_defects) >= 2:
                 final_decision = 'DEFECT'
                 decision_reason = 'multiple_defects'
+            elif has_significant_defects:
+                final_decision = 'DEFECT'
+                decision_reason = 'defects_detected'
             else:
                 final_decision = 'GOOD'
                 decision_reason = 'no_significant_issues'
@@ -1002,7 +961,6 @@ class DetectionService:
             result['smart_decision'] = {
                 'reason': decision_reason,
                 'adaptive_threshold_used': adaptive_threshold,
-                'original_threshold': 0.3,
                 'anomaly_score': anomaly_score,
                 'is_anomalous_adaptive': is_anomalous_adaptive,
                 'detected_defects_count': len(detected_defects),
@@ -1020,6 +978,116 @@ class DetectionService:
             self.logger.error(f"Error in integrated smart final decision: {e}")
             return result
     
+    # Keep existing health and status methods...
+    def get_health_status(self):
+        """Get health status"""
+        from config import OPENAI_API_KEY
+        
+        base_status = {
+            'detector': {
+                'available': self.detector is not None,
+                'ready': self.detector.is_ready() if self.detector else False,
+                'status': 'operational' if self.detector and self.detector.is_ready() else 'not_ready'
+            },
+            'openai': {
+                'available': bool(OPENAI_API_KEY),
+                'status': 'operational' if OPENAI_API_KEY else 'not_configured'
+            },
+            'real_time_processing': {
+                'enabled': True,
+                'frame_optimizations': self.smart_config['frame_optimizations'],
+                'model_warmup_done': self.frame_cache['model_warmup_done'],
+                'adaptive_thresholds': True,
+                'enhanced_detection': True,
+                'mock_data_removed': True  # CLEANED
+            },
+            'smart_processing': {
+                'enabled': self.smart_config['smart_enabled'],
+                'integrated': True,
+                'sensitivity_level': self.smart_config['anomaly_sensitivity'],
+                'intelligent_filtering': self.smart_config['enable_intelligent_filtering']
+            },
+            'overall_status': 'healthy' if self.is_initialized else 'degraded',
+            'initialization_error': self.initialization_error,
+            'mode': 'real_detection_only'
+        }
+        
+        return base_status
+    
+    def get_system_information(self):
+        """Get system information"""
+        if not self.detector:
+            raise RuntimeError("Detector not available")
+        
+        try:
+            from config import OPENAI_API_KEY, OPENAI_MODEL
+            
+            system_info = self.detector.get_system_info()
+            
+            system_info.update({
+                'service_status': 'operational' if self.is_initialized else 'degraded',
+                'real_time_processing': {
+                    'enabled': True,
+                    'frame_optimizations': self.smart_config['frame_optimizations'],
+                    'enhanced_detection': True,
+                    'adaptive_thresholds': True,
+                    'model_warmup': self.frame_cache['model_warmup_done'],
+                    'mock_data_removed': True,  # CLEANED
+                    'features': ['real_detection_only', 'smart_filtering', 'adaptive_sensitivity', 'frame_caching']
+                },
+                'smart_processing': {
+                    'integrated': True,
+                    'enabled': self.smart_config['smart_enabled'],
+                    'current_config': self.get_smart_config(),
+                    'features': ['adaptive_thresholds', 'intelligent_filtering', 'nms', 'confidence_boosting']
+                },
+                'openai_integration': {
+                    'enabled': bool(OPENAI_API_KEY),
+                    'model': OPENAI_MODEL if OPENAI_API_KEY else None,
+                    'features': ['anomaly_analysis', 'defect_analysis'] if OPENAI_API_KEY else []
+                },
+                'api_version': '1.0.0',
+                'mode': 'real_detection_only'
+            })
+            
+            return system_info
+            
+        except Exception as e:
+            self.logger.error(f"Error getting system info: {e}")
+            raise RuntimeError(f"System info unavailable: {e}")
+    
+    def get_current_status(self):
+        """Get current system status"""
+        from config import OPENAI_API_KEY
+        
+        return {
+            'system_ready': self.is_initialized,
+            'detector_ready': self.detector.is_ready() if self.detector else False,
+            'openai_ready': bool(OPENAI_API_KEY),
+            'smart_processing_ready': self.smart_config['smart_enabled'],
+            'real_time_ready': True,
+            'processing_capabilities': {
+                'single_image': self.detector is not None,
+                'batch_processing': self.detector is not None,
+                'real_time_frames': True,
+                'smart_processing': self.smart_config['smart_enabled'],
+                'enhanced_detection': True,
+                'openai_analysis': bool(OPENAI_API_KEY),
+                'frame_caching': self.smart_config['frame_optimizations']['enable_model_caching'],
+                'mock_data': False  # CLEANED
+            },
+            'frame_cache_info': {
+                'consecutive_good_frames': self.frame_cache['consecutive_good_frames'],
+                'model_warmup_done': self.frame_cache['model_warmup_done'],
+                'last_processed': self.frame_cache['last_processed_time']
+            },
+            'current_load': self._get_current_load(),
+            'memory_usage': self._get_memory_usage(),
+            'mode': 'real_detection_only',
+            'last_check': datetime.now().isoformat()
+        }
+    
+    # Keep remaining utility methods...
     def set_smart_sensitivity(self, anomaly_sensitivity='medium', defect_sensitivity='medium'):
         """Set smart processing sensitivity levels"""
         valid_levels = ['low', 'medium', 'high']
@@ -1056,95 +1124,8 @@ class DetectionService:
                 'nms_enabled': self.smart_config['enable_nms'],
                 'intelligent_filtering': self.smart_config['enable_intelligent_filtering']
             },
-            'frame_optimizations': self.smart_config['frame_optimizations']
-        }
-    
-    def get_system_information(self):
-        """Get system information including real-time processing"""
-        if not self.detector:
-            return {
-                'status': 'not_initialized',
-                'error': 'Detector not available',
-                'mode': 'real_time_enhanced'
-            }
-        
-        try:
-            from config import OPENAI_API_KEY, OPENAI_MODEL
-            
-            system_info = self.detector.get_system_info()
-            
-            system_info.update({
-                'service_status': 'operational' if self.is_initialized else 'degraded',
-                'real_time_processing': {
-                    'enabled': True,
-                    'frame_optimizations': self.smart_config['frame_optimizations'],
-                    'enhanced_detection': True,
-                    'adaptive_thresholds': True,
-                    'model_warmup': self.frame_cache['model_warmup_done'],
-                    'features': ['guaranteed_defect_detection', 'smart_filtering', 'adaptive_sensitivity', 'frame_caching']
-                },
-                'smart_processing': {
-                    'integrated': True,
-                    'enabled': self.smart_config['smart_enabled'],
-                    'current_config': self.get_smart_config(),
-                    'features': ['adaptive_thresholds', 'intelligent_filtering', 'nms', 'confidence_boosting']
-                },
-                'openai_integration': {
-                    'enabled': bool(OPENAI_API_KEY),
-                    'model': OPENAI_MODEL if OPENAI_API_KEY else None,
-                    'features': ['anomaly_analysis', 'defect_analysis'] if OPENAI_API_KEY else []
-                },
-                'components': {
-                    'main_detector': True,
-                    'smart_processor': self.smart_config['smart_enabled'],
-                    'real_time_processor': True,
-                    'enhanced_detector': True,
-                    'openai_analyzer': bool(OPENAI_API_KEY),
-                    'database': False,
-                    'file_storage': False
-                },
-                'api_version': '1.0.0',
-                'mode': 'real_time_enhanced'
-            })
-            
-            return system_info
-            
-        except Exception as e:
-            self.logger.error(f"Error getting system info: {e}")
-            return {
-                'status': 'error',
-                'error': str(e),
-                'mode': 'real_time_enhanced'
-            }
-    
-    def get_current_status(self):
-        """Get current system status with real-time processing info"""
-        from config import OPENAI_API_KEY
-        
-        return {
-            'system_ready': self.is_initialized,
-            'detector_ready': self.detector.is_ready() if self.detector else False,
-            'openai_ready': bool(OPENAI_API_KEY),
-            'smart_processing_ready': self.smart_config['smart_enabled'],
-            'real_time_ready': True,
-            'processing_capabilities': {
-                'single_image': self.detector is not None,
-                'batch_processing': self.detector is not None,
-                'real_time_frames': True,
-                'smart_processing': self.smart_config['smart_enabled'],
-                'enhanced_detection': True,
-                'openai_analysis': bool(OPENAI_API_KEY),
-                'frame_caching': self.smart_config['frame_optimizations']['enable_model_caching']
-            },
-            'frame_cache_info': {
-                'consecutive_good_frames': self.frame_cache['consecutive_good_frames'],
-                'model_warmup_done': self.frame_cache['model_warmup_done'],
-                'last_processed': self.frame_cache['last_processed_time']
-            },
-            'current_load': self._get_current_load(),
-            'memory_usage': self._get_memory_usage(),
-            'mode': 'real_time_enhanced',
-            'last_check': datetime.now().isoformat()
+            'frame_optimizations': self.smart_config['frame_optimizations'],
+            'mock_data_removed': True  # CLEANED
         }
     
     def update_thresholds(self, new_thresholds):
@@ -1164,13 +1145,14 @@ class DetectionService:
             return False
     
     def get_thresholds(self):
-        """Get current detection thresholds including smart settings"""
+        """Get current detection thresholds"""
         return {
             'standard_thresholds': self.config,
             'smart_settings': self.get_smart_config(),
             'configurable': True,
             'storage': 'in-memory',
-            'last_updated': datetime.now().isoformat()
+            'last_updated': datetime.now().isoformat(),
+            'mock_data_removed': True  # CLEANED
         }
     
     def _get_current_load(self):
@@ -1199,7 +1181,7 @@ class DetectionService:
                 'available_gb': round(memory.available / (1024**3), 2),
                 'used_gb': round(memory.used / (1024**3), 2),
                 'percent_used': memory.percent,
-                'mode': 'real_time_enhanced'
+                'mode': 'real_detection_only'
             }
         except ImportError:
             return {
@@ -1207,5 +1189,5 @@ class DetectionService:
                 'available_gb': 0,
                 'used_gb': 0,
                 'percent_used': 0,
-                'mode': 'real_time_enhanced'
+                'mode': 'real_detection_only'
             }
