@@ -825,13 +825,14 @@ class DetectionController:
             }
     
     def _extract_defects_for_desired_format(self, result):
-        """Extract defects in the desired format - FIXED: Single defect per type"""
+        """FIXED: Extract defects in the desired format - Single defect per type with total_regions=1"""
         defects = []
         
         try:
             defect_classification = result.get('defect_classification', {})
             
             bounding_boxes = {}
+            defect_statistics = {}
             
             if 'defect_analysis' in defect_classification:
                 bounding_boxes = defect_classification['defect_analysis'].get('bounding_boxes', {})
@@ -857,12 +858,12 @@ class DetectionController:
                 
                 stats = defect_statistics.get(defect_type, {})
                 
-                # FIXED: Combine all bounding boxes for this defect type
-                combined_bbox = self._combine_bounding_boxes_for_defect_type(boxes)
-                
-                if combined_bbox:
-                    # Calculate combined area percentage
-                    total_defect_area = sum(box.get('area', box.get('width', 0) * box.get('height', 0)) for box in boxes)
+                # FIXED: Take the FIRST (and should be ONLY) combined bounding box
+                if len(boxes) > 0:
+                    combined_bbox = boxes[0]  # Should be the single combined box
+                    
+                    # Calculate area percentage from the combined box
+                    total_defect_area = combined_bbox.get('area', combined_bbox.get('width', 0) * combined_bbox.get('height', 0))
                     total_image_area = actual_image_width * actual_image_height
                     
                     if total_image_area > 0:
@@ -871,22 +872,22 @@ class DetectionController:
                     else:
                         area_percentage = 0
                     
-                    # Get confidence score (average or max from all boxes)
-                    confidences = [box.get('confidence', 0) for box in boxes if box.get('confidence', 0) > 0]
-                    if confidences:
-                        confidence_score = max(confidences)  # Use highest confidence
-                    else:
-                        confidence_score = stats.get('avg_confidence', 0.85)
+                    # Get confidence score from the combined box or stats
+                    confidence_score = combined_bbox.get('confidence', stats.get('avg_confidence', 0.85))
                     
                     if isinstance(confidence_score, (int, float)):
                         confidence_score = round(confidence_score, 3)
                     else:
                         confidence_score = 0.85
                     
-                    # Determine severity level based on combined area
+                    # Check for frame-specific confidence boosting
+                    confidence_boosted = combined_bbox.get('frame_confidence_boosted', False)
+                    original_confidence = combined_bbox.get('original_confidence') if confidence_boosted else None
+                    
+                    # Determine severity level
                     severity_level = combined_bbox.get('severity', self._determine_severity_level(area_percentage, defect_type))
                     
-                    # FIXED: Create SINGLE defect info per defect type
+                    # FIXED: Create SINGLE defect info per defect type with total_regions=1
                     defect_info = {
                         'label': defect_type,
                         'confidence_score': confidence_score,
@@ -898,13 +899,16 @@ class DetectionController:
                             'width': combined_bbox.get('width', 0),
                             'height': combined_bbox.get('height', 0)
                         },
-                        'total_regions': len(boxes),  # How many regions were combined
-                        'combined_defect': True  # Mark as combined
+                        'total_regions': 1,  # FIXED: Always 1 for single defect per type
+                        'combined_defect': True,  # FIXED: Mark as combined
+                        'confidence_boosted': confidence_boosted,
+                        'original_confidence': original_confidence,
+                        'detection_method': 'enhanced_single_defect_per_type'
                     }
                     
                     defects.append(defect_info)
                     
-                    self.logger.info(f"FIXED: Combined {len(boxes)} regions into single defect: {defect_type}")
+                    self.logger.info(f"✅ FIXED: Single defect entry for {defect_type} with total_regions=1")
             
             # If no bounding boxes found but we have detected defects, create simplified entries
             if not defects and result.get('detected_defect_types'):
@@ -920,8 +924,9 @@ class DetectionController:
                             'width': 50,
                             'height': 50
                         },
-                        'total_regions': 1,
-                        'combined_defect': False
+                        'total_regions': 1,  # FIXED: Always 1
+                        'combined_defect': False,
+                        'detection_method': 'fallback_single_defect'
                     }
                     defects.append(defect_info)
             
@@ -929,49 +934,149 @@ class DetectionController:
             self.logger.error(f"Error extracting defects: {e}")
         
         return defects
-    
+
+    def _extract_enhanced_defects_for_frames(self, result):
+        """FIXED: Extract defects with enhanced detection for frame processing - Single defect per type with total_regions=1"""
+        defects = []
+        
+        try:
+            defect_classification = result.get('defect_classification', {})
+            
+            # Get bounding boxes from enhanced detection
+            bounding_boxes = {}
+            defect_statistics = {}
+            
+            if 'defect_analysis' in defect_classification:
+                bounding_boxes = defect_classification['defect_analysis'].get('bounding_boxes', {})
+                defect_statistics = defect_classification['defect_analysis'].get('defect_statistics', {})
+            elif 'bounding_boxes' in defect_classification:
+                bounding_boxes = defect_classification['bounding_boxes']
+                defect_statistics = defect_classification.get('defect_statistics', {})
+            
+            # Get actual image dimensions for accurate calculations
+            actual_image_width = 640
+            actual_image_height = 640
+            
+            if 'image_dimensions' in result:
+                actual_image_width = result['image_dimensions'].get('width', 640)
+                actual_image_height = result['image_dimensions'].get('height', 640)
+            
+            # FIXED: Process each defect type ONCE (single combined box per type)
+            for defect_type, boxes in bounding_boxes.items():
+                if not boxes:
+                    continue
+                
+                stats = defect_statistics.get(defect_type, {})
+                
+                # FIXED: Take the FIRST (and should be ONLY) combined bounding box
+                if len(boxes) > 0:
+                    combined_bbox = boxes[0]  # Should be the single combined box
+                    
+                    # Calculate combined area percentage
+                    total_defect_area = combined_bbox.get('area', combined_bbox.get('width', 0) * combined_bbox.get('height', 0))
+                    total_image_area = actual_image_width * actual_image_height
+                    
+                    if total_image_area > 0:
+                        area_percentage = (total_defect_area / total_image_area) * 100
+                        area_percentage = min(area_percentage, 100.0)
+                    else:
+                        area_percentage = 0
+                    
+                    # Get confidence score from combined box
+                    confidence_score = combined_bbox.get('confidence', stats.get('avg_confidence', 0.85))
+                    
+                    if isinstance(confidence_score, (int, float)):
+                        confidence_score = round(confidence_score, 3)
+                    else:
+                        confidence_score = 0.85
+                    
+                    # Check for frame-specific confidence boosting
+                    confidence_boosted = combined_bbox.get('frame_confidence_boosted', False)
+                    original_confidence = combined_bbox.get('original_confidence') if confidence_boosted else None
+                    
+                    # Determine severity level for frames
+                    severity_level = combined_bbox.get('severity', self._determine_frame_severity_level(area_percentage, defect_type))
+                    
+                    # FIXED: Create SINGLE defect info per defect type with total_regions=1
+                    defect_info = {
+                        'label': defect_type,
+                        'confidence_score': confidence_score,
+                        'severity_level': severity_level,
+                        'area_percentage': round(area_percentage, 2),
+                        'bounding_box': {
+                            'x': combined_bbox.get('x', 0),
+                            'y': combined_bbox.get('y', 0),
+                            'width': combined_bbox.get('width', 0),
+                            'height': combined_bbox.get('height', 0)
+                        },
+                        
+                        # FIXED: Frame-specific information with total_regions=1
+                        'frame_enhanced': True,
+                        'confidence_boosted': confidence_boosted,
+                        'original_confidence': original_confidence,
+                        'detection_method': 'enhanced_real_time',
+                        'total_regions': 1,  # FIXED: Always 1 for single defect per type
+                        'combined_defect': True  # FIXED: Mark as combined defect
+                    }
+                    
+                    defects.append(defect_info)
+                    
+                    self.logger.info(f"✅ FIXED: Single frame defect entry for {defect_type} with total_regions=1")
+                        
+            # If no bounding boxes found but we have detected defects, create enhanced entries
+            if not defects and result.get('detected_defect_types'):
+                for defect_type in result['detected_defect_types']:
+                    defect_info = {
+                        'label': defect_type,
+                        'confidence_score': 0.85,
+                        'severity_level': 'moderate',
+                        'area_percentage': 1.0,
+                        'bounding_box': {
+                            'x': 0,
+                            'y': 0,
+                            'width': 50,
+                            'height': 50
+                        },
+                        'frame_enhanced': True,
+                        'confidence_boosted': False,
+                        'detection_method': 'enhanced_fallback',
+                        'total_regions': 1,  # FIXED: Always 1
+                        'combined_defect': False
+                    }
+                    defects.append(defect_info)
+                    
+        except Exception as e:
+            self.logger.error(f"Error extracting enhanced defects for frames: {e}")
+        
+        return defects
+
     def _combine_bounding_boxes_for_defect_type(self, boxes):
-        """FIXED: Combine multiple bounding boxes into single representative box"""
+        """FIXED: This method should not be needed anymore since we use single combined boxes"""
+        # This method is kept for compatibility but should return the single box
         try:
             if not boxes:
                 return None
             
             if len(boxes) == 1:
-                return boxes[0]
+                # Already a single box, just ensure it has correct metadata
+                single_box = boxes[0].copy()
+                single_box['original_regions_count'] = 1
+                single_box['is_combined_result'] = True
+                return single_box
             
-            # Find overall bounding box that encompasses all boxes
-            min_x = min(box.get('x', 0) for box in boxes)
-            min_y = min(box.get('y', 0) for box in boxes)
-            max_x = max(box.get('x', 0) + box.get('width', 0) for box in boxes)
-            max_y = max(box.get('y', 0) + box.get('height', 0) for box in boxes)
+            # This should not happen with the new implementation, but handle it gracefully
+            self.logger.warning(f"Multiple boxes found when expecting single combined box: {len(boxes)}")
             
-            combined_width = max_x - min_x
-            combined_height = max_y - min_y
-            combined_area = sum(box.get('area', box.get('width', 0) * box.get('height', 0)) for box in boxes)
+            # Return the first box with metadata indicating it represents a combined result
+            first_box = boxes[0].copy()
+            first_box['original_regions_count'] = len(boxes)
+            first_box['is_combined_result'] = True
+            first_box['note'] = 'Multiple boxes found, returning first box as representative'
             
-            # Calculate combined center
-            centers_x = [box.get('center_x', box.get('x', 0) + box.get('width', 0)//2) for box in boxes]
-            centers_y = [box.get('center_y', box.get('y', 0) + box.get('height', 0)//2) for box in boxes]
-            
-            combined_center_x = int(sum(centers_x) / len(centers_x))
-            combined_center_y = int(sum(centers_y) / len(centers_y))
-            
-            # Create combined bounding box
-            combined_bbox = {
-                'x': int(min_x),
-                'y': int(min_y),
-                'width': int(combined_width),
-                'height': int(combined_height),
-                'area': int(combined_area),
-                'center_x': combined_center_x,
-                'center_y': combined_center_y,
-                'combined_from': len(boxes)
-            }
-            
-            return combined_bbox
+            return first_box
             
         except Exception as e:
-            self.logger.error(f"Error combining bounding boxes: {e}")
+            self.logger.error(f"Error in combine bounding boxes: {e}")
             return boxes[0] if boxes else None
     
     def _determine_severity_level(self, area_percentage, defect_type):

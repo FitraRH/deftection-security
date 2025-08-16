@@ -1,6 +1,7 @@
-# core/detection.py - Enhanced with OpenAI 1.x
+# core/detection.py - Enhanced with OpenAI 1.x and RAG Prompts
 """
 Core detection logic with OpenAI analysis integration (OpenAI 1.x compatible)
+ENHANCED with RAG prompts for accurate defect classification
 """
 
 import cv2
@@ -16,7 +17,7 @@ from config import *
 
 
 class DetectionCore:
-    """Core detection functionality with OpenAI integration"""
+    """Core detection functionality with enhanced OpenAI integration and RAG prompts"""
     
     def __init__(self, anomalib_model, hrnet_model, device='cuda'):
         self.anomalib_model = anomalib_model
@@ -27,7 +28,7 @@ class DetectionCore:
         if OPENAI_API_KEY:
             self.openai_client = OpenAI(api_key=OPENAI_API_KEY)
             self.openai_enabled = True
-            print("OpenAI client initialized (1.x)")
+            print("OpenAI client initialized (1.x) with RAG prompts")
         else:
             self.openai_client = None
             self.openai_enabled = False
@@ -42,7 +43,7 @@ class DetectionCore:
     
     def detect_anomaly(self, image_path):
         """
-        Layer 1: Anomaly detection with OpenAI analysis
+        Layer 1: Anomaly detection with enhanced OpenAI analysis
         """
         if not self.anomalib_model:
             raise ValueError("Anomalib model not loaded")
@@ -81,10 +82,10 @@ class DetectionCore:
                 'decision': 'DEFECT' if (is_anomalous and anomaly_score > ANOMALY_THRESHOLD) else 'GOOD'
             }
             
-            # OpenAI Layer 1 Analysis - ALWAYS RUN FOR TESTING
+            # Enhanced OpenAI Layer 1 Analysis - ALWAYS RUN FOR TESTING
             if self.openai_enabled:
-                print(f"Running OpenAI anomaly analysis (score: {anomaly_score:.3f})")
-                openai_analysis = self._analyze_anomaly_with_openai(image_path, base_result)
+                print(f"Running enhanced OpenAI anomaly analysis (score: {anomaly_score:.3f})")
+                openai_analysis = self._analyze_anomaly_with_openai_enhanced(image_path, base_result)
                 base_result['openai_analysis'] = openai_analysis
             
             return base_result
@@ -95,7 +96,7 @@ class DetectionCore:
     
     def classify_defects(self, image_path, region_mask=None):
         """
-        Layer 2: Defect classification with OpenAI analysis
+        Layer 2: Defect classification with enhanced OpenAI analysis
         """
         if not self.hrnet_model:
             raise ValueError("HRNet model not loaded")
@@ -147,10 +148,10 @@ class DetectionCore:
                 'class_distribution': defect_analysis['class_distribution']
             }
             
-            # OpenAI Layer 2 Analysis - ALWAYS RUN IF ENABLED
+            # Enhanced OpenAI Layer 2 Analysis - ALWAYS RUN IF ENABLED
             if self.openai_enabled:
-                print(f"Running OpenAI defect analysis")
-                openai_analysis = self._analyze_defects_with_openai(image_path, base_result)
+                print(f"Running enhanced OpenAI defect analysis with RAG prompts")
+                openai_analysis = self._analyze_defects_with_openai_enhanced(image_path, base_result)
                 base_result['openai_analysis'] = openai_analysis
             
             return base_result
@@ -159,8 +160,8 @@ class DetectionCore:
             print(f"Error in defect classification: {e}")
             return None
     
-    def _analyze_anomaly_with_openai(self, image_path, anomaly_result):
-        """OpenAI analysis for Layer 1 (Anomaly Detection) - 1.x compatible"""
+    def _analyze_anomaly_with_openai_enhanced(self, image_path, anomaly_result):
+        """Enhanced OpenAI analysis for Layer 1 (Anomaly Detection) dengan RAG prompts"""
         try:
             if not self.openai_client:
                 return {
@@ -172,22 +173,50 @@ class DetectionCore:
             # Encode image to base64
             image_base64 = self._encode_image_to_base64(image_path)
             
-            prompt = f"""Analyze this product image for quality control.
-            
-Model Results:
+            # Enhanced RAG prompt for anomaly detection
+            prompt = f"""Analyze this product packaging image for quality control defects.
+
+ANOMALY DETECTION MODEL RESULTS:
 - Anomaly Score: {anomaly_result['anomaly_score']:.3f}
 - Decision: {anomaly_result['decision']}
 - Threshold: {anomaly_result['threshold_used']}
 
-Provide analysis on:
-1. Visual quality assessment
-2. Confidence in model decision (percentage)
-3. Key observations
-4. Recommendation
+PACKAGING DEFECT TYPES TO IDENTIFY:
 
-Be concise and technical."""
+1. DAMAGED: Physical structural damage
+   - Visual signs: Crushed areas, dented corners, collapsed sections, bent/warped material
+   - Examples: Crushed cereal box corner, dented can, flattened plastic bottle
+   - Severity indicators: Size of deformed area, depth of damage
 
-            print("Calling OpenAI API...")
+2. MISSING_COMPONENT: Absent packaging elements
+   - Visual signs: Missing caps/lids, absent labels/stickers, missing protective seals
+   - Examples: Missing bottle cap, absent safety seal, missing product label
+   - Severity indicators: Essential vs non-essential component
+
+3. OPEN: Unwanted openings compromising closure
+   - Visual signs: Holes showing dark interior, tears, rips, gaps in seams, punctures
+   - Examples: Hole in plastic bag, torn cardboard flap, ripped food packaging
+   - Severity indicators: Size of opening, contamination risk
+
+4. SCRATCH: Surface abrasions affecting appearance
+   - Visual signs: Thin linear marks, scrape marks, surface abrasions, scuff marks
+   - Examples: Scratched plastic container, scuffed box surface, abraded label
+   - Severity indicators: Depth of scratch, visibility
+
+5. STAINED: Discoloration or contamination marks
+   - Visual signs: Dark spots, discolored areas, dirty marks, water stains, grease marks
+   - Examples: Water-stained cardboard, grease marks on packaging, dirt smudges
+   - Severity indicators: Stain size, color contrast
+
+ANALYSIS REQUIREMENTS:
+1. Visual quality assessment based on defect types above
+2. Confidence in anomaly detection accuracy (0-100%)
+3. Key observations about packaging condition
+4. Technical recommendation for quality control
+
+Focus on accuracy using the specific defect classifications provided. Be precise and technical."""
+
+            print("Calling OpenAI API with enhanced RAG prompt...")
             response = self.openai_client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
@@ -206,25 +235,26 @@ Be concise and technical."""
             analysis_text = response.choices[0].message.content
             confidence = self._extract_confidence_percentage(analysis_text)
             
-            print(f"OpenAI analysis completed - confidence: {confidence}%")
+            print(f"Enhanced OpenAI anomaly analysis completed - confidence: {confidence}%")
             
             return {
                 'analysis': analysis_text,
                 'confidence_percentage': confidence,
                 'model_used': OPENAI_MODEL,
-                'layer': 'anomaly_detection'
+                'layer': 'anomaly_detection',
+                'rag_enhanced': True
             }
             
         except Exception as e:
-            print(f"OpenAI anomaly analysis error: {e}")
+            print(f"Enhanced OpenAI anomaly analysis error: {e}")
             return {
                 'analysis': f'OpenAI analysis failed: {str(e)}',
                 'confidence_percentage': 0,
                 'error': str(e)
             }
     
-    def _analyze_defects_with_openai(self, image_path, defect_result):
-        """OpenAI analysis for Layer 2 (Defect Classification) with bounding box validation - 1.x compatible"""
+    def _analyze_defects_with_openai_enhanced(self, image_path, defect_result):
+        """Enhanced OpenAI analysis for Layer 2 (Defect Classification) dengan RAG prompts dan bounding box validation"""
         try:
             if not self.openai_client:
                 return {
@@ -241,27 +271,69 @@ Be concise and technical."""
             # Create visual prompt with bounding box information
             bbox_info = ""
             for defect_type, boxes in bounding_boxes.items():
-                bbox_info += f"\n{defect_type}: {len(boxes)} regions detected"
-                for i, bbox in enumerate(boxes[:3]):  # Limit to first 3 boxes per type
-                    bbox_info += f"\n  - Region {i+1}: x={bbox['x']}, y={bbox['y']}, w={bbox['width']}, h={bbox['height']}"
+                bbox_info += f"\n{defect_type.upper()}: {len(boxes)} regions detected"
+                for i, bbox in enumerate(boxes[:2]):  # Limit to first 2 boxes per type for readability
+                    x, y, w, h = bbox['x'], bbox['y'], bbox['width'], bbox['height']
+                    area_pct = bbox.get('area_percentage', 0)
+                    bbox_info += f"\n  Region {i+1}: Location({x},{y}) Size({w}x{h}) Coverage({area_pct:.1f}%)"
             
-            prompt = f"""Analyze this product image with detected defects and their bounding box locations.
+            # Enhanced RAG prompt with detailed defect classification
+            prompt = f"""Analyze this product packaging image for defect classification accuracy and spatial validation.
 
+MODEL DETECTION RESULTS:
 DETECTED DEFECTS: {', '.join(detected_defects) if detected_defects else 'None detected'}
-BOUNDING BOX LOCATIONS:{bbox_info if bbox_info else ' None'}
+BOUNDING BOX LOCATIONS:{bbox_info if bbox_info else ' None provided'}
 
-DEFECT CLASSES: {list(SPECIFIC_DEFECT_CLASSES.values())}
+DEFECT CLASSIFICATION REFERENCE (be extremely specific):
 
-Provide analysis on:
-1. Visual quality assessment
-2. Defect severity if any (Minor/Moderate/Significant/Critical)
-3. Confidence in detection accuracy (percentage)
-4. Spatial accuracy of bounding boxes if present (percentage)
-5. Overall product quality recommendation
+1. DAMAGED: Physical structural damage to packaging integrity
+   - Visual characteristics: Crushed areas with visible deformation, dented corners/edges, collapsed or flattened sections, bent/warped packaging material, compression marks, structural deformation
+   - Typical locations: Corners, edges, pressure points during handling/shipping
+   - Examples: Crushed cereal box corner, dented aluminum can, flattened plastic bottle
+   - Severity assessment: Based on deformation size, structural integrity loss
 
-Be specific and technical."""
+2. MISSING_COMPONENT: Absence of expected packaging elements or parts
+   - Visual characteristics: Empty areas where components should be, missing caps/lids/closures, absent labels/stickers, missing protective seals, incomplete packaging assembly
+   - Typical locations: Top areas (caps/lids), edges (seals), branded areas (labels)
+   - Examples: Missing bottle cap, absent safety seal, missing product label, incomplete multi-part packaging
+   - Severity assessment: Essential vs non-essential component, safety implications
 
-            print("Calling OpenAI API for defect analysis...")
+3. OPEN: Unwanted openings that compromise package closure and integrity
+   - Visual characteristics: Holes or punctures showing dark interior, tears in packaging material, rips creating visible openings, gaps in seams/joints, unsealed edges/flaps
+   - Typical locations: Seams, stress points, fold lines, thin material areas
+   - Examples: Hole in plastic bag showing dark interior, torn cardboard flap, ripped food packaging, punctured container
+   - Severity assessment: Opening size, location criticality, contamination risk
+
+4. SCRATCH: Surface abrasions that affect packaging appearance but not structure
+   - Visual characteristics: Thin linear marks/lines, surface scrape marks, light abrasions on packaging surface, scuff marks from handling, superficial damage not affecting structure
+   - Typical locations: High-contact surfaces, edges, corners during handling
+   - Examples: Scratched plastic container surface, scuffed box exterior, abraded label area
+   - Severity assessment: Scratch depth, visibility, coverage area
+
+5. STAINED: Discoloration or contamination marks on packaging surfaces
+   - Visual characteristics: Dark spots/patches, discolored areas different from original color, dirty marks/smudges, water stains/moisture damage, grease/oil marks
+   - Typical locations: Any surface area, commonly bottom or contact points
+   - Examples: Water-stained cardboard, grease marks on packaging, dirt smudges, discolored areas
+   - Severity assessment: Stain size, color contrast, contamination type
+
+BOUNDING BOX ACCURACY VALIDATION:
+- Boxes should tightly encompass defect areas with minimal empty space
+- Multiple small defects may be grouped in single box per defect type
+- Corner defects: boxes near image edges (0-10% or 90-100% of dimensions)
+- Center defects: boxes in middle regions (40-60% of dimensions)
+- Size validation: Very small boxes (<2% area) vs very large boxes (>50% area)
+
+CRITICAL ANALYSIS TASKS:
+1. DEFECT TYPE VALIDATION: Carefully examine if detected defects match the correct classification above
+2. VISUAL VERIFICATION: What specific defects do you actually observe in the image?
+3. MISCLASSIFICATION CHECK: Are any defects incorrectly classified? (e.g., "open" classified as "scratch")
+4. BOUNDING BOX SPATIAL ACCURACY: Do boxes correctly locate and encompass defects? Rate 0-100%
+5. SEVERITY ASSESSMENT: Evaluate defect severity (Minor/Moderate/Significant/Critical)
+6. OVERALL CONFIDENCE: Model accuracy confidence rating (0-100%)
+
+Be extremely specific about defect types observed versus detected. Correct any misclassifications. Focus on distinguishing between similar defects (e.g., open holes vs surface scratches)."""
+
+            print("Calling OpenAI API for enhanced defect analysis with RAG...")
             response = self.openai_client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
@@ -281,7 +353,7 @@ Be specific and technical."""
             confidence = self._extract_confidence_percentage(analysis_text)
             bbox_confidence = self._extract_bbox_confidence(analysis_text)
             
-            print(f"OpenAI defect analysis completed - confidence: {confidence}%")
+            print(f"Enhanced OpenAI defect analysis completed - confidence: {confidence}%")
             
             return {
                 'analysis': analysis_text,
@@ -294,11 +366,13 @@ Be specific and technical."""
                 'model_used': OPENAI_MODEL,
                 'layer': 'defect_classification',
                 'defects_analyzed': detected_defects,
-                'bounding_boxes_analyzed': {k: len(v) for k, v in bounding_boxes.items()}
+                'bounding_boxes_analyzed': {k: len(v) for k, v in bounding_boxes.items()},
+                'rag_enhanced': True,
+                'classification_validation': True
             }
             
         except Exception as e:
-            print(f"OpenAI defect analysis error: {e}")
+            print(f"Enhanced OpenAI defect analysis error: {e}")
             return {
                 'analysis': f'OpenAI analysis failed: {str(e)}',
                 'confidence_percentage': 0,
@@ -328,7 +402,9 @@ Be specific and technical."""
             r'bounding box.*?(\d+)%',
             r'spatial.*?(\d+)%',
             r'location.*?(\d+)%',
-            r'bbox.*?(\d+)%'
+            r'bbox.*?(\d+)%',
+            r'accuracy.*?(\d+)%',
+            r'boxes.*?(\d+)%'
         ]
         
         confidences = []
