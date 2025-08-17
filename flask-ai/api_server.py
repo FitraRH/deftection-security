@@ -311,7 +311,7 @@ class EnhancedAPIServer:
             }), 415
     
     def _perform_security_scan_with_proper_data(self, original_request):
-        """ENHANCED: Perform security scan with proper image data transfer"""
+        """FIXED: Perform security scan with proper image data transfer - NO MOCK"""
         try:
             # Extract image data from the original request
             image_data = None
@@ -387,33 +387,39 @@ class EnhancedAPIServer:
             
             self.logger.info(f"Security scan - Successfully extracted: {len(image_data)} bytes, filename: {filename}")
             
-            # ENHANCED: Use JSON approach instead of form-data to avoid file pointer issues
-            import base64
-            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            # FIXED: Direct call to security controller with proper data
+            self.logger.info("Security scan - Calling security controller directly with extracted data")
             
-            # Create mock JSON request instead of form-data request
-            class MockJSONRequest:
-                def __init__(self, image_base64, filename):
-                    self.json_data = {
-                        'image_base64': image_base64,
-                        'filename': filename,
-                        'is_full_scan': False  # Light scan for combined
-                    }
-                    self.files = {}
-                    self.form = {}
-                    self.content_type = 'application/json'
-                    self.is_json = True
+            # Create proper file-like object for security controller
+            from io import BytesIO
+            from werkzeug.datastructures import FileStorage
+            
+            # Create file storage object that mimics uploaded file
+            file_stream = BytesIO(image_data)
+            file_storage = FileStorage(
+                stream=file_stream,
+                filename=filename,
+                content_type='image/jpeg'
+            )
+            
+            # Create request-like object for security controller
+            class DirectSecurityRequest:
+                def __init__(self, file_storage, filename):
+                    self.files = {'image': file_storage}
+                    self.form = {'is_full_scan': 'false'}  # Light scan for combined
+                    self.content_type = 'multipart/form-data'
+                    self.is_json = False
                     self.method = 'POST'
                 
                 def get_json(self):
-                    return self.json_data
+                    return None
             
-            mock_request = MockJSONRequest(image_base64, filename)
+            direct_request = DirectSecurityRequest(file_storage, filename)
             
-            self.logger.info("Security scan - Created mock JSON request, calling security controller")
+            self.logger.info("Security scan - Created direct request, calling security controller")
             
-            # Perform security scan using the mock JSON request
-            result = self.security_controller.scan_image_laravel(mock_request)
+            # Perform security scan using direct request
+            result = self.security_controller.scan_image_laravel(direct_request)
             
             self.logger.info(f"Security scan - Controller returned: {type(result)}")
             

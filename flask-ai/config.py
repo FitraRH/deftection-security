@@ -1,6 +1,6 @@
 """
 Complete Configuration file for Flask-AI + Security Scanner + OpenAI Integration
-PRODUCTION MODE: Stable thresholds for reliable performance
+FIXED: Lowered confidence thresholds for better detection
 """
 
 import os
@@ -24,9 +24,9 @@ MODELS_DIR = BASE_DIR / "models"
 ANOMALIB_MODEL_PATH = MODELS_DIR / "patchcore.pt"
 HRNET_MODEL_PATH = MODELS_DIR / "defect_segmentation_model.pth"
 
-# Detection thresholds - PRODUCTION VALUES
+# Detection thresholds - FIXED: Lowered for better detection
 ANOMALY_THRESHOLD = 0.3
-DEFECT_CONFIDENCE_THRESHOLD = 0.50
+DEFECT_CONFIDENCE_THRESHOLD = 0.15  # FIXED: Lowered from 0.50 to 0.15
 
 # Device configuration
 DEVICE = 'cuda'  # or 'cpu'
@@ -55,10 +55,10 @@ IMAGE_SIZE = (512, 512)
 NORMALIZE_MEAN = [0.485, 0.456, 0.406]
 NORMALIZE_STD = [0.229, 0.224, 0.225]
 
-# Minimum detection thresholds - PRODUCTION VALUES
+# Minimum detection thresholds - FIXED: Lowered for better detection
 MIN_DEFECT_PIXELS = 50
-MIN_DEFECT_PERCENTAGE = 0.005  # 0.5%
-MIN_BBOX_AREA = 100
+MIN_DEFECT_PERCENTAGE = 0.001  # FIXED: Lowered from 0.005 to 0.001 (0.1%)
+MIN_BBOX_AREA = 50  # FIXED: Lowered from 100 to 50
 
 # ===========================
 # OPENAI CONFIGURATION
@@ -161,4 +161,4 @@ if not MALWARE_HASH_FILE.exists():
         pass  # Ignore if we can't create it
 
 print(f"Configuration loaded - Flask-AI + Security Scanner + OpenAI Integration")
-print(f"Production Mode - Stable thresholds for reliable performance")
+print(f"FIXED: Lowered confidence thresholds for better detection - DEFECT_CONFIDENCE_THRESHOLD: {DEFECT_CONFIDENCE_THRESHOLD}")

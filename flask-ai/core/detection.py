@@ -1,7 +1,8 @@
-# core/detection.py - Enhanced with OpenAI 1.x and RAG Prompts
+# core/detection.py - Enhanced with OpenAI Bounding Box Validation and Type Correction
 """
 Core detection logic with OpenAI analysis integration (OpenAI 1.x compatible)
-ENHANCED with RAG prompts for accurate defect classification
+ENHANCED with RAG prompts for accurate defect classification and bounding box validation
+FIXED: OpenAI validation for bounding box accuracy and defect type correction
 """
 
 import cv2
@@ -17,7 +18,7 @@ from config import *
 
 
 class DetectionCore:
-    """Core detection functionality with enhanced OpenAI integration and RAG prompts"""
+    """Core detection functionality with enhanced OpenAI integration and bounding box validation"""
     
     def __init__(self, anomalib_model, hrnet_model, device='cuda'):
         self.anomalib_model = anomalib_model
@@ -28,7 +29,7 @@ class DetectionCore:
         if OPENAI_API_KEY:
             self.openai_client = OpenAI(api_key=OPENAI_API_KEY)
             self.openai_enabled = True
-            print("OpenAI client initialized (1.x) with RAG prompts")
+            print("OpenAI client initialized with bounding box validation and type correction")
         else:
             self.openai_client = None
             self.openai_enabled = False
@@ -82,7 +83,7 @@ class DetectionCore:
                 'decision': 'DEFECT' if (is_anomalous and anomaly_score > ANOMALY_THRESHOLD) else 'GOOD'
             }
             
-            # Enhanced OpenAI Layer 1 Analysis - ALWAYS RUN FOR TESTING
+            # Enhanced OpenAI Layer 1 Analysis
             if self.openai_enabled:
                 print(f"Running enhanced OpenAI anomaly analysis (score: {anomaly_score:.3f})")
                 openai_analysis = self._analyze_anomaly_with_openai_enhanced(image_path, base_result)
@@ -96,7 +97,7 @@ class DetectionCore:
     
     def classify_defects(self, image_path, region_mask=None):
         """
-        Layer 2: Defect classification with enhanced OpenAI analysis
+        Layer 2: Defect classification with enhanced OpenAI analysis and bounding box validation
         """
         if not self.hrnet_model:
             raise ValueError("HRNet model not loaded")
@@ -136,8 +137,9 @@ class DetectionCore:
                                          (original_size[1], original_size[0]), 
                                          interpolation=cv2.INTER_LINEAR)
             
-            # Analyze defect predictions
-            defect_analysis = self._analyze_defect_predictions(predicted_mask, confidence_scores)
+            # FIXED: Use enhanced defect analysis with background class skip
+            from core.enhanced_detection import analyze_defect_predictions_enhanced
+            defect_analysis = analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, original_size)
             
             base_result = {
                 'predicted_mask': predicted_mask,
@@ -148,11 +150,19 @@ class DetectionCore:
                 'class_distribution': defect_analysis['class_distribution']
             }
             
-            # Enhanced OpenAI Layer 2 Analysis - ALWAYS RUN IF ENABLED
-            if self.openai_enabled:
-                print(f"Running enhanced OpenAI defect analysis with RAG prompts")
+            # Enhanced OpenAI Layer 2 Analysis with bounding box validation and type correction
+            if self.openai_enabled and defect_analysis['detected_defects']:
+                print(f"Running enhanced OpenAI defect analysis with bounding box validation and type correction")
                 openai_analysis = self._analyze_defects_with_openai_enhanced(image_path, base_result)
                 base_result['openai_analysis'] = openai_analysis
+                
+                # Apply OpenAI corrections if available
+                if openai_analysis.get('bbox_corrections') or openai_analysis.get('type_corrections'):
+                    corrections = {
+                        'bbox_corrections': openai_analysis.get('bbox_corrections', {}),
+                        'type_corrections': openai_analysis.get('type_corrections', {})
+                    }
+                    base_result = self._apply_openai_corrections(base_result, corrections)
             
             return base_result
             
@@ -161,7 +171,7 @@ class DetectionCore:
             return None
     
     def _analyze_anomaly_with_openai_enhanced(self, image_path, anomaly_result):
-        """Enhanced OpenAI analysis for Layer 1 (Anomaly Detection) dengan RAG prompts"""
+        """Enhanced OpenAI analysis for Layer 1 (Anomaly Detection) with RAG prompts"""
         try:
             if not self.openai_client:
                 return {
@@ -254,7 +264,7 @@ Focus on accuracy using the specific defect classifications provided. Be precise
             }
     
     def _analyze_defects_with_openai_enhanced(self, image_path, defect_result):
-        """Enhanced OpenAI analysis for Layer 2 (Defect Classification) dengan RAG prompts dan bounding box validation"""
+        """Enhanced OpenAI analysis for Layer 2 with bounding box validation and defect type correction"""
         try:
             if not self.openai_client:
                 return {
@@ -268,72 +278,61 @@ Focus on accuracy using the specific defect classifications provided. Be precise
             detected_defects = defect_result['detected_defects']
             bounding_boxes = defect_result.get('bounding_boxes', {})
             
-            # Create visual prompt with bounding box information
+            # Create detailed bounding box information for validation
             bbox_info = ""
+            total_bboxes = 0
             for defect_type, boxes in bounding_boxes.items():
                 bbox_info += f"\n{defect_type.upper()}: {len(boxes)} regions detected"
-                for i, bbox in enumerate(boxes[:2]):  # Limit to first 2 boxes per type for readability
+                total_bboxes += len(boxes)
+                for i, bbox in enumerate(boxes):
                     x, y, w, h = bbox['x'], bbox['y'], bbox['width'], bbox['height']
                     area_pct = bbox.get('area_percentage', 0)
-                    bbox_info += f"\n  Region {i+1}: Location({x},{y}) Size({w}x{h}) Coverage({area_pct:.1f}%)"
+                    conf = bbox.get('confidence', 0)
+                    bbox_info += f"\n  Region {i+1}: Box({x},{y},{w},{h}) Area({area_pct:.1f}%) Conf({conf:.3f})"
             
-            # Enhanced RAG prompt with detailed defect classification
-            prompt = f"""Analyze this product packaging image for defect classification accuracy and spatial validation.
+            # Enhanced RAG prompt with bounding box validation focus
+            prompt = f"""Analyze this product packaging image for defect classification accuracy and correction.
 
 MODEL DETECTION RESULTS:
 DETECTED DEFECTS: {', '.join(detected_defects) if detected_defects else 'None detected'}
-BOUNDING BOX LOCATIONS:{bbox_info if bbox_info else ' None provided'}
+TOTAL BOUNDING BOXES: {total_bboxes}
+BOUNDING BOX DETAILS:{bbox_info if bbox_info else ' None provided'}
 
-DEFECT CLASSIFICATION REFERENCE (be extremely specific):
+CRITICAL VISUAL ANALYSIS TASKS:
 
-1. DAMAGED: Physical structural damage to packaging integrity
-   - Visual characteristics: Crushed areas with visible deformation, dented corners/edges, collapsed or flattened sections, bent/warped packaging material, compression marks, structural deformation
-   - Typical locations: Corners, edges, pressure points during handling/shipping
-   - Examples: Crushed cereal box corner, dented aluminum can, flattened plastic bottle
-   - Severity assessment: Based on deformation size, structural integrity loss
+1. DEFECT TYPE CORRECTION: Look at the actual visual defects in the image
+   - OPEN: Holes, tears, gaps, punctures showing dark interior or background
+   - SCRATCH: Linear surface marks, abrasions, scuff marks on surface
+   - MISSING_COMPONENT: Absent parts like caps, labels, seals
+   - DAMAGED: Physical structural damage like crushed, dented areas
+   - STAINED: Discoloration, spots, contamination marks
 
-2. MISSING_COMPONENT: Absence of expected packaging elements or parts
-   - Visual characteristics: Empty areas where components should be, missing caps/lids/closures, absent labels/stickers, missing protective seals, incomplete packaging assembly
-   - Typical locations: Top areas (caps/lids), edges (seals), branded areas (labels)
-   - Examples: Missing bottle cap, absent safety seal, missing product label, incomplete multi-part packaging
-   - Severity assessment: Essential vs non-essential component, safety implications
+2. COMMON MISCLASSIFICATION PATTERNS:
+   - Open holes often misclassified as "missing_component" or "stained"
+   - Surface scratches misclassified as "stained"
+   - Large background areas incorrectly detected as "defects"
 
-3. OPEN: Unwanted openings that compromise package closure and integrity
-   - Visual characteristics: Holes or punctures showing dark interior, tears in packaging material, rips creating visible openings, gaps in seams/joints, unsealed edges/flaps
-   - Typical locations: Seams, stress points, fold lines, thin material areas
-   - Examples: Hole in plastic bag showing dark interior, torn cardboard flap, ripped food packaging, punctured container
-   - Severity assessment: Opening size, location criticality, contamination risk
+3. WHAT DO YOU ACTUALLY SEE in this image?
+   - Describe the visible defects in plain language
+   - Are there holes, tears, or openings? (This would be "open")
+   - Are there surface scratches or marks? (This would be "scratch")
+   - Are there missing parts? (This would be "missing_component")
 
-4. SCRATCH: Surface abrasions that affect packaging appearance but not structure
-   - Visual characteristics: Thin linear marks/lines, surface scrape marks, light abrasions on packaging surface, scuff marks from handling, superficial damage not affecting structure
-   - Typical locations: High-contact surfaces, edges, corners during handling
-   - Examples: Scratched plastic container surface, scuffed box exterior, abraded label area
-   - Severity assessment: Scratch depth, visibility, coverage area
+4. BOUNDING BOX VALIDATION:
+   - Are boxes positioned on actual defects or empty background?
+   - Do boxes cover 50%+ of image? (Likely false positive)
+   - Are coordinates reasonable for the defect type?
 
-5. STAINED: Discoloration or contamination marks on packaging surfaces
-   - Visual characteristics: Dark spots/patches, discolored areas different from original color, dirty marks/smudges, water stains/moisture damage, grease/oil marks
-   - Typical locations: Any surface area, commonly bottom or contact points
-   - Examples: Water-stained cardboard, grease marks on packaging, dirt smudges, discolored areas
-   - Severity assessment: Stain size, color contrast, contamination type
+5. PROVIDE CORRECTIONS:
+   If you see defects that are misclassified, specify:
+   CORRECT_TYPE: [actual_defect_type] - [reason why this is the correct type]
+   
+   If bounding boxes are wrong, specify:
+   BBOX_CORRECTION: [defect_type]: x,y,width,height - [reason for correction]
 
-BOUNDING BOX ACCURACY VALIDATION:
-- Boxes should tightly encompass defect areas with minimal empty space
-- Multiple small defects may be grouped in single box per defect type
-- Corner defects: boxes near image edges (0-10% or 90-100% of dimensions)
-- Center defects: boxes in middle regions (40-60% of dimensions)
-- Size validation: Very small boxes (<2% area) vs very large boxes (>50% area)
+Focus on what you ACTUALLY see in the image vs what the model detected. The model may have incorrectly classified an "open" defect as something else."""
 
-CRITICAL ANALYSIS TASKS:
-1. DEFECT TYPE VALIDATION: Carefully examine if detected defects match the correct classification above
-2. VISUAL VERIFICATION: What specific defects do you actually observe in the image?
-3. MISCLASSIFICATION CHECK: Are any defects incorrectly classified? (e.g., "open" classified as "scratch")
-4. BOUNDING BOX SPATIAL ACCURACY: Do boxes correctly locate and encompass defects? Rate 0-100%
-5. SEVERITY ASSESSMENT: Evaluate defect severity (Minor/Moderate/Significant/Critical)
-6. OVERALL CONFIDENCE: Model accuracy confidence rating (0-100%)
-
-Be extremely specific about defect types observed versus detected. Correct any misclassifications. Focus on distinguishing between similar defects (e.g., open holes vs surface scratches)."""
-
-            print("Calling OpenAI API for enhanced defect analysis with RAG...")
+            print("Calling OpenAI API for enhanced defect and bounding box validation...")
             response = self.openai_client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
@@ -353,7 +352,10 @@ Be extremely specific about defect types observed versus detected. Correct any m
             confidence = self._extract_confidence_percentage(analysis_text)
             bbox_confidence = self._extract_bbox_confidence(analysis_text)
             
-            print(f"Enhanced OpenAI defect analysis completed - confidence: {confidence}%")
+            # Extract corrections from OpenAI response
+            corrections = self._extract_bbox_corrections(analysis_text)
+            
+            print(f"Enhanced OpenAI defect analysis completed - confidence: {confidence}%, bbox: {bbox_confidence}%")
             
             return {
                 'analysis': analysis_text,
@@ -363,12 +365,16 @@ Be extremely specific about defect types observed versus detected. Correct any m
                     'validated_regions': len(bounding_boxes),
                     'spatial_accuracy': 'high' if bbox_confidence > 80 else 'medium' if bbox_confidence > 60 else 'low'
                 },
+                'bbox_corrections': corrections.get('bbox_corrections', {}),
+                'type_corrections': corrections.get('type_corrections', {}),
                 'model_used': OPENAI_MODEL,
                 'layer': 'defect_classification',
                 'defects_analyzed': detected_defects,
                 'bounding_boxes_analyzed': {k: len(v) for k, v in bounding_boxes.items()},
                 'rag_enhanced': True,
-                'classification_validation': True
+                'classification_validation': True,
+                'spatial_validation': True,
+                'type_correction_enabled': True
             }
             
         except Exception as e:
@@ -379,6 +385,219 @@ Be extremely specific about defect types observed versus detected. Correct any m
                 'bbox_validation': {'confidence': 0, 'error': str(e)},
                 'error': str(e)
             }
+    
+    def _extract_bbox_corrections(self, analysis_text):
+        """Extract bounding box corrections and defect type corrections from OpenAI analysis"""
+        corrections = {}
+        type_corrections = {}
+        
+        try:
+            import re
+            
+            # Extract defect type corrections
+            type_patterns = [
+                r'CORRECT_TYPE:\s*(\w+)\s*-\s*([^\n]+)',
+                r'should be\s+(\w+)\s+because\s+([^\n]+)',
+                r'actually\s+(\w+)\s+defect\s+([^\n]*)',
+                r'correct\s+type\s+is\s+(\w+)\s+([^\n]*)'
+            ]
+            
+            for pattern in type_patterns:
+                matches = re.finditer(pattern, analysis_text, re.IGNORECASE)
+                for match in matches:
+                    groups = match.groups()
+                    if len(groups) >= 2:
+                        defect_type = groups[0].lower()
+                        reason = groups[1] if len(groups) > 1 else "OpenAI correction"
+                        
+                        # Validate defect type
+                        valid_types = ['open', 'scratch', 'missing_component', 'damaged', 'stained']
+                        if defect_type in valid_types:
+                            type_corrections[defect_type] = {
+                                'corrected_type': defect_type,
+                                'reason': reason,
+                                'source': 'openai_type_correction'
+                            }
+            
+            # Extract bounding box corrections
+            bbox_patterns = [
+                r'BBOX_CORRECTION:\s*(\w+):\s*(\d+),(\d+),(\d+),(\d+)\s*-\s*([^\n]+)',
+                r'CORRECTION:\s*(\w+):\s*(\d+),(\d+),(\d+),(\d+)\s*\(([^)]+)\)',
+                r'(\w+)\s+box\s+should\s+be\s+at\s+(\d+),(\d+)\s+size\s+(\d+)x(\d+)',
+                r'move\s+(\w+)\s+to\s+(\d+),(\d+),(\d+),(\d+)'
+            ]
+            
+            for pattern in bbox_patterns:
+                matches = re.finditer(pattern, analysis_text, re.IGNORECASE)
+                for match in matches:
+                    groups = match.groups()
+                    if len(groups) >= 5:
+                        defect_type = groups[0].lower()
+                        x, y = int(groups[1]), int(groups[2])
+                        w, h = int(groups[3]), int(groups[4])
+                        reason = groups[5] if len(groups) > 5 else "OpenAI bbox correction"
+                        
+                        corrections[defect_type] = {
+                            'x': x, 'y': y, 'width': w, 'height': h,
+                            'reason': reason,
+                            'source': 'openai_validation'
+                        }
+            
+            # Return both types of corrections
+            return {
+                'bbox_corrections': corrections,
+                'type_corrections': type_corrections
+            }
+            
+        except Exception as e:
+            print(f"Error extracting corrections: {e}")
+            return {'bbox_corrections': {}, 'type_corrections': {}}
+    
+    def _apply_openai_corrections(self, result, corrections):
+        """Apply OpenAI bounding box and type corrections to detection result"""
+        try:
+            if not corrections:
+                return result
+            
+            bbox_corrections = corrections.get('bbox_corrections', {})
+            type_corrections = corrections.get('type_corrections', {})
+            
+            print(f"Applying {len(bbox_corrections)} bbox corrections and {len(type_corrections)} type corrections...")
+            
+            bounding_boxes = result.get('bounding_boxes', {})
+            corrected_boxes = {}
+            corrected_defects = []
+            
+            # Apply type corrections first
+            if type_corrections:
+                print("Applying defect type corrections...")
+                
+                # Find the most confident type correction
+                best_correction = None
+                for corrected_type, correction_info in type_corrections.items():
+                    if not best_correction:
+                        best_correction = (corrected_type, correction_info)
+                    # Could add logic to pick best correction if multiple
+                
+                if best_correction:
+                    corrected_type, correction_info = best_correction
+                    print(f"Correcting defect type to: {corrected_type} - {correction_info['reason']}")
+                    
+                    # Find the best existing detection to convert
+                    best_existing = None
+                    best_score = 0
+                    
+                    for existing_type, boxes in bounding_boxes.items():
+                        if boxes:
+                            # Score based on confidence and area reasonableness
+                            box = boxes[0]
+                            confidence = box.get('confidence', 0)
+                            area_pct = box.get('area_percentage', 0)
+                            
+                            # Prefer reasonable sized detections
+                            if corrected_type == 'open' and 1 < area_pct < 20:
+                                score = confidence + 0.5
+                            elif corrected_type == 'scratch' and 0.1 < area_pct < 10:
+                                score = confidence + 0.5
+                            else:
+                                score = confidence
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_existing = (existing_type, box)
+                    
+                    if best_existing:
+                        existing_type, existing_box = best_existing
+                        print(f"Converting {existing_type} detection to {corrected_type}")
+                        
+                        # Create corrected box
+                        corrected_box = existing_box.copy()
+                        corrected_box.update({
+                            'openai_type_corrected': True,
+                            'original_type': existing_type,
+                            'corrected_type': corrected_type,
+                            'correction_reason': correction_info['reason']
+                        })
+                        
+                        # Apply bbox correction if available for this type
+                        if corrected_type in bbox_corrections:
+                            bbox_correction = bbox_corrections[corrected_type]
+                            print(f"Also applying bbox correction for {corrected_type}")
+                            
+                            corrected_box.update({
+                                'x': bbox_correction['x'],
+                                'y': bbox_correction['y'],
+                                'width': bbox_correction['width'],
+                                'height': bbox_correction['height'],
+                                'center_x': bbox_correction['x'] + bbox_correction['width'] // 2,
+                                'center_y': bbox_correction['y'] + bbox_correction['height'] // 2,
+                                'area': bbox_correction['width'] * bbox_correction['height'],
+                                'openai_bbox_corrected': True,
+                                'bbox_correction_reason': bbox_correction['reason']
+                            })
+                            
+                            # Recalculate area percentage
+                            if 'predicted_mask' in result:
+                                total_pixels = result['predicted_mask'].shape[0] * result['predicted_mask'].shape[1]
+                                corrected_box['area_percentage'] = (corrected_box['area'] / total_pixels) * 100
+                        
+                        corrected_boxes[corrected_type] = [corrected_box]
+                        corrected_defects.append(corrected_type)
+                    else:
+                        print(f"No suitable existing detection found to convert to {corrected_type}")
+            
+            # If no type corrections applied, apply bbox corrections to existing types
+            if not corrected_boxes:
+                for defect_type, boxes in bounding_boxes.items():
+                    if defect_type in bbox_corrections and boxes:
+                        correction = bbox_corrections[defect_type]
+                        print(f"Applying bbox correction for {defect_type}: {correction['reason']}")
+                        
+                        corrected_box = boxes[0].copy()
+                        corrected_box.update({
+                            'x': correction['x'],
+                            'y': correction['y'],
+                            'width': correction['width'],
+                            'height': correction['height'],
+                            'center_x': correction['x'] + correction['width'] // 2,
+                            'center_y': correction['y'] + correction['height'] // 2,
+                            'area': correction['width'] * correction['height'],
+                            'openai_bbox_corrected': True,
+                            'correction_reason': correction['reason']
+                        })
+                        
+                        # Recalculate area percentage
+                        if 'predicted_mask' in result:
+                            total_pixels = result['predicted_mask'].shape[0] * result['predicted_mask'].shape[1]
+                            corrected_box['area_percentage'] = (corrected_box['area'] / total_pixels) * 100
+                        
+                        corrected_boxes[defect_type] = [corrected_box]
+                    else:
+                        corrected_boxes[defect_type] = boxes
+                
+                corrected_defects = list(corrected_boxes.keys())
+            
+            # Update result with corrections
+            if corrected_boxes:
+                result['bounding_boxes'] = corrected_boxes
+                result['detected_defects'] = corrected_defects
+                
+                if 'defect_analysis' in result:
+                    result['defect_analysis']['bounding_boxes'] = corrected_boxes
+                    result['defect_analysis']['detected_defects'] = corrected_defects
+            
+            result['openai_corrections_applied'] = True
+            result['corrections_summary'] = {
+                'type_corrections_count': len(type_corrections),
+                'bbox_corrections_count': len(bbox_corrections),
+                'final_defect_types': corrected_defects
+            }
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error applying OpenAI corrections: {e}")
+            return result
     
     def _encode_image_to_base64(self, image_path):
         """Encode image to base64 for OpenAI"""
@@ -404,7 +623,8 @@ Be extremely specific about defect types observed versus detected. Correct any m
             r'location.*?(\d+)%',
             r'bbox.*?(\d+)%',
             r'accuracy.*?(\d+)%',
-            r'boxes.*?(\d+)%'
+            r'boxes.*?(\d+)%',
+            r'positioning.*?(\d+)%'
         ]
         
         confidences = []
