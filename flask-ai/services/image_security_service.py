@@ -1,7 +1,7 @@
-# services/image_security_service.py - Simplified Version
+# services/image_security_service.py - Enhanced Version with YARA Rules
 """
-Simplified Image Security Service - Works without YARA/magic dependencies
-Falls back to basic file validation and hash checking
+Enhanced Image Security Service - WITH YARA Rules Support
+Includes fallback logic when YARA is not available
 """
 
 import os
@@ -12,6 +12,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
+# YARA support with fallback
+try:
+    import yara
+    YARA_AVAILABLE = True
+    print("YARA-Python is available")
+except ImportError:
+    YARA_AVAILABLE = False
+    print("Warning: YARA-Python not available. Install with: pip install yara-python")
+
+# PIL support with fallback
 try:
     from PIL import Image
     from PIL.ExifTags import TAGS
@@ -46,21 +56,24 @@ except ImportError:
     YARA_RULES_DIR = "security_data/yara_rules"
 
 class ImageSecurityService:
-    """Simplified Image Security Service - Works without external dependencies"""
+    """Enhanced Image Security Service - WITH YARA Rules Support + Fallback"""
     
     def __init__(self):
-        """Initialize service with fallback capability"""
+        """Initialize service with YARA support and fallback capability"""
         self.MALWARE_HASH_FILE = str(MALWARE_HASH_FILE)
+        self.YARA_RULES_DIR = str(YARA_RULES_DIR)
         self.ALLOWED_EXTENSIONS = ALLOWED_EXTENSIONS
         self.MAX_FILE_SIZE = MAX_FILE_SIZE
         self.RISK_LEVELS = RISK_LEVELS
         
-        # Initialize components that are available
+        # Initialize components
         self.malware_hashes = self._load_malware_hashes()
-        self.yara_rules = None  # Disabled for simplified version
+        self.yara_rules = self._load_yara_rules() if YARA_AVAILABLE else None
         
-        print(f"Simplified ImageSecurityService initialized")
+        print(f"Enhanced ImageSecurityService initialized")
         print(f"  Malware hashes loaded: {len(self.malware_hashes)}")
+        print(f"  YARA available: {YARA_AVAILABLE}")
+        print(f"  YARA rules loaded: {'Yes' if self.yara_rules else 'No'}")
         print(f"  PIL available: {PIL_AVAILABLE}")
         print(f"  Config available: {CONFIG_AVAILABLE}")
     
@@ -82,6 +95,237 @@ class ImageSecurityService:
             print(f"Malware hash file not found (optional): {self.MALWARE_HASH_FILE}")
         
         return hashes
+    
+    def _load_yara_rules(self) -> Optional[yara.Rules]:
+        """Load and compile YARA rules"""
+        if not YARA_AVAILABLE:
+            return None
+        
+        try:
+            # Create YARA rules directory if it doesn't exist
+            os.makedirs(self.YARA_RULES_DIR, exist_ok=True)
+            
+            # Create sample YARA rules if directory is empty
+            self._create_sample_yara_rules()
+            
+            # Find all .yar and .yara files
+            rule_files = []
+            for ext in ['*.yar', '*.yara']:
+                rule_files.extend(Path(self.YARA_RULES_DIR).glob(ext))
+            
+            if not rule_files:
+                print(f"No YARA rule files found in {self.YARA_RULES_DIR}")
+                return None
+            
+            # Compile rules
+            rule_dict = {}
+            for rule_file in rule_files:
+                try:
+                    rule_name = rule_file.stem
+                    rule_dict[rule_name] = str(rule_file)
+                    print(f"Found YARA rule: {rule_name}")
+                except Exception as e:
+                    print(f"Error adding rule {rule_file}: {e}")
+            
+            if rule_dict:
+                compiled_rules = yara.compile(filepaths=rule_dict)
+                print(f"Successfully compiled {len(rule_dict)} YARA rule files")
+                return compiled_rules
+            else:
+                print("No valid YARA rules to compile")
+                return None
+                
+        except Exception as e:
+            print(f"Error loading YARA rules: {e}")
+            return None
+    
+    def _create_sample_yara_rules(self):
+        """Create sample YARA rules for demonstration"""
+        if not os.path.exists(self.YARA_RULES_DIR):
+            os.makedirs(self.YARA_RULES_DIR, exist_ok=True)
+        
+        # Sample malware detection rules
+        sample_rules = {
+            "malware_patterns.yar": '''
+/*
+    Basic Malware Detection Rules
+    These are sample rules for demonstration
+*/
+
+rule Suspicious_Embedded_PE
+{
+    meta:
+        description = "Detects embedded PE files in images"
+        severity = "high"
+        author = "Security Scanner"
+        
+    strings:
+        $pe_header = { 4D 5A }  // MZ header
+        $pe_signature = "This program cannot be run in DOS mode"
+        
+    condition:
+        $pe_header and $pe_signature
+}
+
+rule Suspicious_Script_Content
+{
+    meta:
+        description = "Detects suspicious script content in image metadata"
+        severity = "medium"
+        
+    strings:
+        $script1 = "<script" nocase
+        $script2 = "eval(" nocase
+        $script3 = "document.write" nocase
+        $script4 = "javascript:" nocase
+        
+    condition:
+        any of them
+}
+
+rule Web_Shell_Patterns
+{
+    meta:
+        description = "Detects web shell patterns"
+        severity = "critical"
+        
+    strings:
+        $shell1 = "system($_" nocase
+        $shell2 = "exec($_" nocase
+        $shell3 = "shell_exec(" nocase
+        $shell4 = "passthru(" nocase
+        $shell5 = "eval(base64_decode(" nocase
+        
+    condition:
+        any of them
+}
+            ''',
+            
+            "steganography_detection.yar": '''
+/*
+    Steganography Detection Rules
+*/
+
+rule Steganography_Tools
+{
+    meta:
+        description = "Detects steganography tool signatures"
+        severity = "medium"
+        
+    strings:
+        $steg1 = "steghide" nocase
+        $steg2 = "outguess" nocase
+        $steg3 = "jsteg" nocase
+        $steg4 = "f5stego" nocase
+        
+    condition:
+        any of them
+}
+
+rule Hidden_Archive_Signature
+{
+    meta:
+        description = "Detects hidden archive files"
+        severity = "low"
+        
+    strings:
+        $zip = { 50 4B 03 04 }  // ZIP signature
+        $rar = { 52 61 72 21 1A 07 00 }  // RAR signature
+        $7z = { 37 7A BC AF 27 1C }  // 7Z signature
+        
+    condition:
+        any of them
+}
+            ''',
+            
+            "polyglot_detection.yar": '''
+/*
+    Polyglot File Detection Rules
+*/
+
+rule Polyglot_PDF_Image
+{
+    meta:
+        description = "Detects PDF/Image polyglot files"
+        severity = "high"
+        
+    strings:
+        $pdf_header = "%PDF"
+        $jpeg_header = { FF D8 FF }
+        $png_header = { 89 50 4E 47 }
+        
+    condition:
+        $pdf_header and ($jpeg_header or $png_header)
+}
+
+rule Suspicious_Metadata_Length
+{
+    meta:
+        description = "Detects unusually large metadata sections"
+        severity = "medium"
+        
+    condition:
+        filesize > 1MB 
+}
+            '''
+        }
+        
+        # Write sample rules to files
+        for filename, content in sample_rules.items():
+            rule_path = Path(self.YARA_RULES_DIR) / filename
+            if not rule_path.exists():
+                try:
+                    with open(rule_path, 'w') as f:
+                        f.write(content)
+                    print(f"Created sample YARA rule: {filename}")
+                except Exception as e:
+                    print(f"Error creating sample rule {filename}: {e}")
+    
+    def scan_with_yara(self, file_path: str) -> List[Dict[str, Any]]:
+        """Scan file with YARA rules"""
+        if not self.yara_rules:
+            return []
+        
+        try:
+            matches = self.yara_rules.match(file_path)
+            yara_results = []
+            
+            for match in matches:
+                # Extract metadata
+                meta = {}
+                if hasattr(match, 'meta'):
+                    for key, value in match.meta.items():
+                        meta[key] = value
+                
+                # Determine severity
+                severity = meta.get('severity', 'medium').lower()
+                if severity not in ['low', 'medium', 'high', 'critical']:
+                    severity = 'medium'
+                
+                yara_result = {
+                    'rule_name': match.rule,
+                    'description': meta.get('description', f'YARA rule {match.rule} matched'),
+                    'severity': severity,
+                    'author': meta.get('author', 'Unknown'),
+                    'meta': meta,
+                    'strings_matched': []
+                }
+                
+                # Add matched strings info
+                for string in match.strings:
+                    yara_result['strings_matched'].append({
+                        'identifier': string.identifier,
+                        'offset': string.instances[0].offset if string.instances else 0,
+                        'length': string.instances[0].length if string.instances else 0
+                    })
+                
+                yara_results.append(yara_result)
+            
+            return yara_results
+            
+        except Exception as e:
+            print(f"YARA scanning error: {e}")
+            return []
     
     def validate_file(self, filename: str, file_size: int) -> Dict[str, Any]:
         """Validate file using basic parameters"""
@@ -195,6 +439,19 @@ class ImageSecurityService:
         if scan_results.get('hash_analysis', {}).get('known_malware', False):
             max_risk = max(max_risk, RISK_LEVELS['CRITICAL'])
         
+        # Check YARA matches
+        yara_matches = scan_results.get('yara_matches', [])
+        for match in yara_matches:
+            severity = match.get('severity', 'medium').lower()
+            if severity == 'critical':
+                max_risk = max(max_risk, RISK_LEVELS['CRITICAL'])
+            elif severity == 'high':
+                max_risk = max(max_risk, RISK_LEVELS['HIGH'])
+            elif severity == 'medium':
+                max_risk = max(max_risk, RISK_LEVELS['MEDIUM'])
+            elif severity == 'low':
+                max_risk = max(max_risk, RISK_LEVELS['LOW'])
+        
         # Check EXIF threats
         exif_threats = scan_results.get('exif_analysis', {}).get('exif_threats', [])
         for threat in exif_threats:
@@ -215,7 +472,7 @@ class ImageSecurityService:
         return risk_map.get(max_risk, 'CLEAN')
     
     def scan_file(self, file_data: bytes, filename: str, is_full_scan: bool = False) -> Dict[str, Any]:
-        """Main method to scan uploaded file - simplified version"""
+        """Main method to scan uploaded file - enhanced with YARA"""
         start_time = time.time()
         
         # Validate file first
@@ -234,7 +491,7 @@ class ImageSecurityService:
             temp_file_path = temp_file.name
         
         try:
-            # Perform simplified scan
+            # Perform enhanced scan
             if is_full_scan:
                 result = self.perform_full_scan(temp_file_path, filename)
             else:
@@ -245,7 +502,8 @@ class ImageSecurityService:
                 'scan_type': 'full' if is_full_scan else 'light',
                 'duration': round(time.time() - start_time, 3),
                 'file_size': len(file_data),
-                'filename': filename
+                'filename': filename,
+                'yara_enabled': YARA_AVAILABLE and self.yara_rules is not None
             }
             
             return result
@@ -258,13 +516,13 @@ class ImageSecurityService:
                 print(f"Error cleaning up temp file: {e}")
     
     def perform_light_scan(self, file_path: str, filename: str) -> Dict[str, Any]:
-        """Perform light scan - simplified version"""
+        """Perform light scan - enhanced with YARA"""
         start_time = time.time()
         scan_results = {
             'scan_type': 'light',
             'file_info': self.get_file_info(file_path, filename),
             'hash_analysis': {},
-            'yara_matches': [],  # Empty for simplified version
+            'yara_matches': [],
             'exif_analysis': {},
             'mime_validation': {},
             'threats_detected': 0
@@ -277,6 +535,10 @@ class ImageSecurityService:
                 'hashes': hashes,
                 'known_malware': self.check_malware_hash(hashes['sha256'])
             }
+            
+            # YARA scanning - ENABLED!
+            if YARA_AVAILABLE and self.yara_rules:
+                scan_results['yara_matches'] = self.scan_with_yara(file_path)
             
             # MIME type validation
             scan_results['mime_validation'] = self.get_mime_type_validation(file_path, filename)
@@ -300,6 +562,7 @@ class ImageSecurityService:
             threats_count = 0
             if scan_results['hash_analysis']['known_malware']:
                 threats_count += 1
+            threats_count += len(scan_results['yara_matches'])  # YARA matches now count!
             threats_count += len(scan_results['exif_analysis']['exif_threats'])
             
             scan_results['threats_detected'] = threats_count
@@ -315,13 +578,13 @@ class ImageSecurityService:
         return scan_results
     
     def perform_full_scan(self, file_path: str, filename: str) -> Dict[str, Any]:
-        """Perform full scan - simplified version"""
+        """Perform full scan - enhanced with YARA"""
         start_time = time.time()
         scan_results = {
             'scan_type': 'full',
             'file_info': self.get_file_info(file_path, filename),
             'hash_analysis': {},
-            'yara_matches': [],  # Empty for simplified version
+            'yara_matches': [],
             'exif_analysis': {},
             'mime_validation': {},
             'entropy_analysis': {},
@@ -341,6 +604,10 @@ class ImageSecurityService:
                 if hash_type == 'sha256' and self.check_malware_hash(hash_value):
                     scan_results['hash_analysis']['known_malware'] = True
                     break
+            
+            # YARA scanning - ENABLED!
+            if YARA_AVAILABLE and self.yara_rules:
+                scan_results['yara_matches'] = self.scan_with_yara(file_path)
             
             # Complete MIME validation
             scan_results['mime_validation'] = self.get_mime_type_validation(file_path, filename)
@@ -372,6 +639,7 @@ class ImageSecurityService:
             threats_count = 0
             if scan_results['hash_analysis']['known_malware']:
                 threats_count += 1
+            threats_count += len(scan_results['yara_matches'])  # YARA matches now count!
             threats_count += len(scan_results['exif_analysis']['exif_threats'])
             
             scan_results['threats_detected'] = threats_count
@@ -430,7 +698,7 @@ class ImageSecurityService:
         return exif_data
     
     def analyze_exif_threats(self, exif_data: Dict[str, Any], is_full_scan: bool) -> List[Dict[str, Any]]:
-        """Analyze EXIF data for threats - basic version"""
+        """Analyze EXIF data for threats - enhanced version"""
         threats = []
         
         # Basic patterns to check for
@@ -453,7 +721,7 @@ class ImageSecurityService:
         return threats
     
     def _analyze_privacy_data(self, exif_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Analyze EXIF data for privacy concerns - basic version"""
+        """Analyze EXIF data for privacy concerns"""
         privacy_issues = []
         
         # Check for GPS data
@@ -561,10 +829,11 @@ class ImageSecurityService:
         """Get service information and statistics"""
         return {
             'service_name': 'ImageSecurityService',
-            'version': '2.0.0-simplified',
-            'mode': 'simplified',
+            'version': '3.0.0-enhanced',
+            'mode': 'enhanced' if YARA_AVAILABLE and self.yara_rules else 'simplified',
             'malware_hashes_loaded': len(self.malware_hashes),
-            'yara_rules_compiled': False,  # Disabled in simplified version
+            'yara_rules_compiled': bool(self.yara_rules),
+            'yara_available': YARA_AVAILABLE,
             'pil_available': PIL_AVAILABLE,
             'config_available': CONFIG_AVAILABLE,
             'scan_types': ['light', 'full'],
@@ -575,9 +844,10 @@ class ImageSecurityService:
             'features': {
                 'hash_analysis': True,
                 'exif_analysis': PIL_AVAILABLE,
-                'yara_scanning': False,
+                'yara_scanning': YARA_AVAILABLE and bool(self.yara_rules),
                 'magic_detection': False,
                 'entropy_analysis': True,
-                'format_analysis': True
+                'format_analysis': True,
+                'malware_hash_checking': len(self.malware_hashes) > 0
             }
         }

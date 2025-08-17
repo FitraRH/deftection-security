@@ -1,5 +1,5 @@
 """
-Image Security Controller - FIXED to support both file upload and JSON base64
+Image Security Controller - 
 """
 
 import json

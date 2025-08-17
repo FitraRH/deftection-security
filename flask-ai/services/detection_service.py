@@ -1,8 +1,8 @@
 """
 Detection Service FIXED - Background class skip and accurate bounding boxes
-FIXED: Background class (0) completely skipped from defect processing
-FIXED: Accurate single bounding box per defect type
-FIXED: OpenAI validation integration for bounding box accuracy
+Background class (0) completely skipped from defect processing
+Accurate single bounding box per defect type
+OpenAI validation integration for bounding box accuracy
 """
 
 import os
@@ -664,7 +664,7 @@ class DetectionService:
             return None
     
     def _annotate_image_with_insights(self, image, result):
-        """Add annotations to image"""
+        """Add annotations to image WITHOUT text overlays"""
         try:
             import cv2
             from config import DEFECT_COLORS, SPECIFIC_DEFECT_CLASSES
@@ -677,25 +677,17 @@ class DetectionService:
             
             if decision == 'GOOD':
                 annotated = cv2.copyMakeBorder(annotated, 5, 5, 5, 5, cv2.BORDER_CONSTANT, value=(0, 255, 0))
-                cv2.putText(annotated, "GOOD", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+                # REMOVED: cv2.putText for "GOOD"
             elif decision == 'DEFECT':
                 annotated = cv2.copyMakeBorder(annotated, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=(0, 0, 255))
-                cv2.putText(annotated, "DEFECT", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+                # REMOVED: cv2.putText for "DEFECT"
                 
                 if result.get('defect_classification'):
                     self._draw_bounding_boxes(annotated, result['defect_classification'])
             
-            cv2.putText(annotated, f"Score: {anomaly_score:.3f}", (20, height - 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
-            processing_mode = result.get('processing_mode', 'standard')
-            cv2.putText(annotated, f"Mode: {processing_mode}", (20, height - 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-            
-            # Add background skip indicator
-            if result.get('background_class_properly_handled'):
-                cv2.putText(annotated, "BG: SKIP", (20, height - 90),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+            # REMOVED: Score text overlay
+            # REMOVED: Processing mode text overlay  
+            # REMOVED: Background skip indicator
             
             return annotated
             

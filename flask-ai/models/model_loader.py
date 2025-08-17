@@ -1,6 +1,5 @@
 """
 Model loader - Production PatchCore Support
-Loads model based on config.py
 """
 
 import datetime

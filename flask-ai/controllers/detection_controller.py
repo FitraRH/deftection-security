@@ -1,6 +1,5 @@
 """
-Detection Controller FIXED - All syntax errors resolved
-CLEANED: Removed all mock data, kept only config fallbacks, fixed syntax
+Detection Controller 
 """
 
 from flask import jsonify

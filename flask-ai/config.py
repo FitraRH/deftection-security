@@ -1,6 +1,5 @@
 """
 Complete Configuration file for Flask-AI + Security Scanner + OpenAI Integration
-FIXED: Lowered confidence thresholds for better detection
 """
 
 import os
@@ -25,7 +24,7 @@ ANOMALIB_MODEL_PATH = MODELS_DIR / "patchcore.pt"
 HRNET_MODEL_PATH = MODELS_DIR / "defect_segmentation_model.pth"
 
 # Detection thresholds - FIXED: Lowered for better detection
-ANOMALY_THRESHOLD = 0.3
+ANOMALY_THRESHOLD = 0.25
 DEFECT_CONFIDENCE_THRESHOLD = 0.15  # FIXED: Lowered from 0.50 to 0.15
 
 # Device configuration

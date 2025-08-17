@@ -1,6 +1,6 @@
 # models/hrnet_model.py
 """
-Enhanced HRNet model implementation for defect classification
+Enhanced HRNet model implementation 
 """
 
 import torch

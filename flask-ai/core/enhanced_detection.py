@@ -1,7 +1,6 @@
 # core/enhanced_detection.py - BALANCED: Equal opportunity for all defect types
 """
 BALANCED: Enhanced defect prediction analysis with fair scoring across all defect types
-- Background class (0) completely skipped
 - Balanced quality scoring to prevent bias towards specific defect types
 - Equal area thresholds and confidence weighting
 - Multi-candidate consideration with weighted selection
@@ -37,11 +36,11 @@ except ImportError:
     MIN_BBOX_AREA = 50
 
 def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image_shape):
-    """BALANCED: Enhanced defect prediction analysis with fair scoring across all defect types"""
+    """HYBRID: Select defect type based on area percentage with quality tie-breaking"""
     h, w = predicted_mask.shape
     total_pixels = h * w
     
-    print(f"=== BALANCED ENHANCED DETECTION ===")
+    print(f"=== HYBRID DETECTION (Area + Quality) ===")
     print(f"Image shape: {h}x{w} = {total_pixels} pixels")
     print(f"Using confidence threshold: {DEFECT_CONFIDENCE_THRESHOLD}")
     
@@ -53,7 +52,7 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
         'spatial_analysis': {}
     }
     
-    # Collect all potential defects for balanced selection
+    # Collect all potential defects
     potential_defects = []
     
     # Analyze each defect class - SKIP background class (0)
@@ -92,14 +91,14 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
                 # Use confident mask if available, otherwise use class mask
                 detection_mask = confident_mask if confident_pixels > 0 else class_mask
                 
-                # Calculate balanced defect quality score
+                # Calculate quality score
                 defect_score = calculate_balanced_quality_score(
                     detection_mask, class_name, h, w, confidence_scores, pixel_count, confident_pixels
                 )
                 
-                print(f"  {class_name} balanced quality score: {defect_score:.3f}")
+                print(f"  {class_name} quality score: {defect_score:.3f}, area: {percentage:.1f}%")
                 
-                # BALANCED: Use uniform validation criteria
+                # RELAXED validation
                 if is_balanced_defect_candidate(detection_mask, class_name, h, w, percentage):
                     potential_defects.append({
                         'class_name': class_name,
@@ -115,33 +114,39 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
                 else:
                     print(f"  {class_name} rejected as invalid candidate")
             else:
-                print(f"  {class_name} does not meet pixel criteria (confident: {confident_pixels}, total: {pixel_count}, required: {min_pixels})")
+                print(f"  {class_name} does not meet pixel criteria")
     
-    # BALANCED: Select best defect using multi-criteria approach
+    # HYBRID SELECTION: Area percentage with quality tie-breaking
     if potential_defects:
-        # Sort by balanced score and select the best one
-        potential_defects.sort(key=lambda x: x['quality_score'], reverse=True)
+        print(f"=== HYBRID CANDIDATE SELECTION ===")
+        print(f"All candidates:")
+        for i, candidate in enumerate(potential_defects):
+            print(f"  {i+1}. {candidate['class_name']}: area={candidate['area_percentage']:.1f}%, quality={candidate['quality_score']:.3f}")
         
-        # Consider top candidates if scores are close
-        best_defect = potential_defects[0]
+        # Find maximum area percentage
+        max_area = max(defect['area_percentage'] for defect in potential_defects)
+
+        # Get candidates within 5% of max area (to handle close areas)
+        area_tolerance = 0.05  # 5% tolerance
+        large_area_candidates = [
+            d for d in potential_defects 
+            if d['area_percentage'] >= max_area * (1 - area_tolerance)
+        ]
         
-        # Check if multiple candidates have similar scores (within 10% difference)
-        top_candidates = []
-        best_score = best_defect['quality_score']
+        print(f"Large area candidates (within 15% of max {max_area:.1f}%):")
+        for candidate in large_area_candidates:
+            print(f"  - {candidate['class_name']}: {candidate['area_percentage']:.1f}%")
         
-        for defect in potential_defects:
-            if defect['quality_score'] >= best_score * 0.9:  # Within 10% of best score
-                top_candidates.append(defect)
-        
-        print(f"=== BALANCED CANDIDATE SELECTION ===")
-        print(f"Top candidates with similar scores: {len(top_candidates)}")
-        for i, candidate in enumerate(top_candidates):
-            print(f"  {i+1}. {candidate['class_name']}: score={candidate['quality_score']:.3f}, area={candidate['area_percentage']:.1f}%, conf={candidate['confidence_avg']:.3f}")
-        
-        # Apply tie-breaking logic for close scores
-        final_defect = apply_balanced_tie_breaking(top_candidates)
-        
-        print(f"Final selection: {final_defect['class_name']} (score: {final_defect['quality_score']:.3f})")
+        if len(large_area_candidates) == 1:
+            final_defect = large_area_candidates[0]
+            selection_reason = f"area_dominance ({final_defect['area_percentage']:.1f}%)"
+            print(f"Selected by AREA DOMINANCE: {final_defect['class_name']}")
+        else:
+            # Tie-break by quality score among large area candidates
+            large_area_candidates.sort(key=lambda x: x['quality_score'], reverse=True)
+            final_defect = large_area_candidates[0]
+            selection_reason = f"area+quality (area:{final_defect['area_percentage']:.1f}%, quality:{final_defect['quality_score']:.3f})"
+            print(f"Selected by AREA+QUALITY: {final_defect['class_name']} (best quality among large areas)")
         
         # Process the selected defect
         class_name = final_defect['class_name']
@@ -149,14 +154,14 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
         
         analysis['detected_defects'].append(class_name)
         
-        # Extract accurate single bounding box
+        # Extract single bounding box
         single_bbox = extract_balanced_bounding_box(
             detection_mask, class_name, h, w, final_defect['confident_pixels'], confidence_scores
         )
         
         if single_bbox:
             analysis['bounding_boxes'][class_name] = [single_bbox]
-            print(f"   Created balanced bounding box for {class_name}")
+            print(f"   Created bounding box for {class_name}")
             
             # Calculate statistics
             analysis['defect_statistics'][class_name] = {
@@ -168,9 +173,9 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
                 'quality_score': final_defect['quality_score'],
                 'num_regions': 1,
                 'single_defect_per_type': True,
-                'balanced_selection': True,
-                'threshold_used': DEFECT_CONFIDENCE_THRESHOLD,
-                'selection_method': 'balanced_multi_criteria'
+                'selection_method': 'hybrid_area_quality',
+                'selection_reason': selection_reason,
+                'area_percentage': final_defect['area_percentage']
             }
             
             # Spatial analysis
@@ -179,10 +184,9 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
             print(f"   Failed to create bounding box for {class_name}")
             analysis['detected_defects'].remove(class_name)
     
-    print(f"=== BALANCED DETECTION SUMMARY ===")
+    print(f"=== HYBRID DETECTION SUMMARY ===")
     print(f"Detected defects: {analysis['detected_defects']}")
-    print(f"Total detected: {len(analysis['detected_defects'])}")
-    print(f"Selection method: Balanced multi-criteria with tie-breaking")
+    print(f"Selection method: Hybrid (area percentage + quality tie-breaking)")
     
     return analysis
 
@@ -263,27 +267,47 @@ def calculate_balanced_quality_score(mask, defect_type, h, w, confidence_scores,
         return 0.0
 
 def is_balanced_defect_candidate(mask, defect_type, h, w, area_percentage):
-    """BALANCED: Uniform validation criteria for all defect types"""
+    """RELAXED: Defect-specific validation thresholds"""
     try:
-        # BALANCED: Universal thresholds for all defect types
-        if area_percentage > 60:
-            print(f"  Rejecting {defect_type}: covers {area_percentage:.1f}% (universally too large)")
+        # Define realistic max area for each defect type
+        max_area_thresholds = {
+            'scratch': 95,           # Scratches can cover large surface areas
+            'stained': 90,           # Stains can spread widely  
+            'damaged': 85,           # Damage can affect large portions
+            'open': 70,              # Open defects usually more localized
+            'missing_component': 60   # Missing parts are typically smaller areas
+        }
+        
+        max_area = max_area_thresholds.get(defect_type, 70)  # Default 70%
+        
+        if area_percentage > max_area:
+            print(f"  Rejecting {defect_type}: covers {area_percentage:.1f}% (exceeds {max_area}%)")
             return False
         
-        # Check spatial properties
+        # Defect-specific spatial validation
         y_coords, x_coords = np.where(mask)
         if len(x_coords) == 0:
             return False
         
-        # BALANCED: Same spatial validation for all types
         x_span = (np.max(x_coords) - np.min(x_coords)) / w
         y_span = (np.max(y_coords) - np.min(y_coords)) / h
         
-        if x_span > 0.95 and y_span > 0.95:
-            print(f"  Rejecting {defect_type}: spans nearly entire image")
+        # Defect-specific span thresholds
+        span_thresholds = {
+            'scratch': 0.98,         # Linear defects can span wide
+            'stained': 0.95,         # Stains can spread across surface
+            'damaged': 0.90,         # Damage can affect large areas
+            'open': 0.85,            # Open defects more contained
+            'missing_component': 0.80 # Missing parts more localized
+        }
+        
+        span_threshold = span_thresholds.get(defect_type, 0.85)
+        
+        if x_span > span_threshold and y_span > span_threshold:
+            print(f"  Rejecting {defect_type}: spans {x_span:.2f}x{y_span:.2f} (exceeds {span_threshold})")
             return False
         
-        # BALANCED: Minimum size check (same for all types)
+        # Keep minimum size check
         if area_percentage < 0.05:
             print(f"  Rejecting {defect_type}: too small ({area_percentage:.3f}%)")
             return False

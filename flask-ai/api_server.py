@@ -1,4 +1,4 @@
-# api_server.py - ENHANCED Real-time Frame Processing
+# api_server.py 
 """
 ENHANCED Combined Stateless API Server for Defect Detection + Security Scanning
 Now with UPGRADED real-time frame processing using same logic as combined endpoint

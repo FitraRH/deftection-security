@@ -1,4 +1,4 @@
-# utils/stateless_visualization.py - Product-aware visualization
+# utils/stateless_visualization.py 
 """
 Product-aware visualization utilities for generating annotated images
 Automatically detects product boundaries and applies appropriate borders
@@ -35,7 +35,7 @@ def create_annotated_image_base64(image_path, result):
         return None
 
 def annotate_detection_result_product_aware(image, result):
-    """Add annotations to image with product-aware borders"""
+    """Add annotations to image with product-aware borders WITHOUT text overlays"""
     try:
         annotated_frame = image.copy()
         height, width = annotated_frame.shape[:2]
@@ -53,8 +53,7 @@ def annotate_detection_result_product_aware(image, result):
                     annotated_frame = cv2.copyMakeBorder(annotated_frame, 5, 5, 5, 5, 
                                                        cv2.BORDER_CONSTANT, value=(0, 255, 0))
                 
-                cv2.putText(annotated_frame, "GOOD", (20, 40), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+                # REMOVED: cv2.putText for "GOOD"
                            
             elif result['final_decision'] == 'DEFECT':
                 # Add red border around product area only
@@ -65,10 +64,9 @@ def annotate_detection_result_product_aware(image, result):
                     annotated_frame = cv2.copyMakeBorder(annotated_frame, 10, 10, 10, 10, 
                                                        cv2.BORDER_CONSTANT, value=(0, 0, 255))
                 
-                cv2.putText(annotated_frame, "DEFECT", (20, 40), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+                # REMOVED: cv2.putText for "DEFECT"
                 
-                # Draw defect bounding boxes
+                # Draw defect bounding boxes (KEEP THIS)
                 if result.get('defect_classification') and 'bounding_boxes' in result['defect_classification']:
                     draw_defect_bounding_boxes(annotated_frame, result['defect_classification']['bounding_boxes'])
                 elif (result.get('defect_classification') and 
@@ -79,15 +77,7 @@ def annotate_detection_result_product_aware(image, result):
                         result['defect_classification']['defect_analysis']['bounding_boxes']
                     )
             
-            # Add processing info
-            anomaly_score = result.get('anomaly_detection', {}).get('anomaly_score', 0.0)
-            cv2.putText(annotated_frame, f"Score: {anomaly_score:.3f}", 
-                       (20, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
-            # Add processing mode info
-            processing_mode = result.get('processing_mode', 'standard')
-            cv2.putText(annotated_frame, f"Mode: {processing_mode}", 
-                       (20, height - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            # REMOVED: Add processing info (score, mode, etc.)
         
         return annotated_frame
         
