@@ -1,3 +1,11 @@
+# core/enhanced_detection.py - NO TYPE PRIORITY: Natural selection based on actual scan results
+"""
+NATURAL SELECTION: Enhanced defect prediction analysis without artificial type priority
+- Selection based purely on scan results: area, confidence, and quality
+- No hardcoded preference for specific defect types
+- Fair opportunity for all defect types based on actual detection
+"""
+
 import cv2
 import numpy as np
 
@@ -235,28 +243,35 @@ def calculate_natural_quality_score(mask, defect_type, h, w, confidence_scores, 
         return 0.0
 
 def is_natural_defect_candidate(mask, defect_type, h, w, area_percentage):
-    """Natural defect validation - accept largest detection regardless of area"""
+    """Natural defect validation without type-specific bias"""
     try:
+        # Universal max area threshold (same for all types)
+        universal_max_area = 100  # 100% for all defect types
+
+        if area_percentage > universal_max_area:
+            print(f"  Rejecting {defect_type}: covers {area_percentage:.1f}% (exceeds {universal_max_area}%)")
+            return False
+        
+        # Universal spatial validation
+        y_coords, x_coords = np.where(mask)
+        if len(x_coords) == 0:
+            return False
+        
+        x_span = (np.max(x_coords) - np.min(x_coords)) / w
+        y_span = (np.max(y_coords) - np.min(y_coords)) / h
+        
+        # Universal span threshold (same for all types)
+        universal_span_threshold = 0.9  # 90% for all defect types
+        
+        if x_span > universal_span_threshold and y_span > universal_span_threshold:
+            print(f"  Rejecting {defect_type}: spans {x_span:.2f}x{y_span:.2f} (exceeds {universal_span_threshold})")
+            return False
+        
         # Keep minimum size check
         if area_percentage < 0.05:
             print(f"  Rejecting {defect_type}: too small ({area_percentage:.3f}%)")
             return False
         
-        # Keep spatial validation but make it less restrictive
-        y_coords, x_coords = np.where(mask)
-        if len(x_coords) == 0:
-            return False
-        
-        # Only reject if detection has no spatial coherence (scattered noise)
-        x_span = (np.max(x_coords) - np.min(x_coords)) / w
-        y_span = (np.max(y_coords) - np.min(y_coords)) / h
-        
-        # Very loose spatial check - only reject obvious noise patterns
-        if x_span < 0.01 and y_span < 0.01 and area_percentage < 0.1:
-            print(f"  Rejecting {defect_type}: appears to be noise pattern")
-            return False
-        
-        print(f"  Accepting {defect_type}: area={area_percentage:.1f}% (largest detection priority)")
         return True
         
     except Exception as e:

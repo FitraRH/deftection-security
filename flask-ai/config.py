@@ -25,7 +25,7 @@ HRNET_MODEL_PATH = MODELS_DIR / "defect_segmentation_model.pth"
 
 # Detection thresholds - FIXED: Lowered for better detection
 ANOMALY_THRESHOLD = 0.25
-DEFECT_CONFIDENCE_THRESHOLD = 0.15  # FIXED: Lowered from 0.50 to 0.15
+DEFECT_CONFIDENCE_THRESHOLD = 0.15  
 
 # Device configuration
 DEVICE = 'cuda'  # or 'cpu'
