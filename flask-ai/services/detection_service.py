@@ -1,9 +1,3 @@
-"""
-Detection Service CLEAN - All Syntax Errors Fixed
-Product-aware detection with false positive protection
-All variables properly defined and syntax cleaned
-"""
-
 import os
 import cv2
 import numpy as np
