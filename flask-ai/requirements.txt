@@ -10,6 +10,7 @@ torch
 torchvision
 opencv-python
 numpy
+openai
 albumentations
 anomalib>=1.0.1
 Pillow

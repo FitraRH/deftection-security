@@ -1,9 +1,9 @@
-# core/enhanced_detection.py - BALANCED: Equal opportunity for all defect types
+# core/enhanced_detection.py - NO TYPE PRIORITY: Natural selection based on actual scan results
 """
-BALANCED: Enhanced defect prediction analysis with fair scoring across all defect types
-- Balanced quality scoring to prevent bias towards specific defect types
-- Equal area thresholds and confidence weighting
-- Multi-candidate consideration with weighted selection
+NATURAL SELECTION: Enhanced defect prediction analysis without artificial type priority
+- Selection based purely on scan results: area, confidence, and quality
+- No hardcoded preference for specific defect types
+- Fair opportunity for all defect types based on actual detection
 """
 
 import cv2
@@ -36,11 +36,11 @@ except ImportError:
     MIN_BBOX_AREA = 50
 
 def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image_shape):
-    """HYBRID: Select defect type based on area percentage with quality tie-breaking"""
+    """NATURAL SELECTION: Select defect type based on actual scan results without artificial priority"""
     h, w = predicted_mask.shape
     total_pixels = h * w
     
-    print(f"=== HYBRID DETECTION (Area + Quality) ===")
+    print(f"=== NATURAL SELECTION (No Type Priority) ===")
     print(f"Image shape: {h}x{w} = {total_pixels} pixels")
     print(f"Using confidence threshold: {DEFECT_CONFIDENCE_THRESHOLD}")
     
@@ -91,15 +91,15 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
                 # Use confident mask if available, otherwise use class mask
                 detection_mask = confident_mask if confident_pixels > 0 else class_mask
                 
-                # Calculate quality score
-                defect_score = calculate_balanced_quality_score(
+                # Calculate quality score based on actual detection data
+                defect_score = calculate_natural_quality_score(
                     detection_mask, class_name, h, w, confidence_scores, pixel_count, confident_pixels
                 )
                 
-                print(f"  {class_name} quality score: {defect_score:.3f}, area: {percentage:.1f}%")
+                print(f"  {class_name} natural quality score: {defect_score:.3f}, area: {percentage:.1f}%")
                 
-                # RELAXED validation
-                if is_balanced_defect_candidate(detection_mask, class_name, h, w, percentage):
+                # Natural validation - no type-specific bias
+                if is_natural_defect_candidate(detection_mask, class_name, h, w, percentage):
                     potential_defects.append({
                         'class_name': class_name,
                         'class_id': class_id,
@@ -116,37 +116,39 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
             else:
                 print(f"  {class_name} does not meet pixel criteria")
     
-    # HYBRID SELECTION: Area percentage with quality tie-breaking
+    # NATURAL SELECTION: Pure area-based with natural tie-breaking
     if potential_defects:
-        print(f"=== HYBRID CANDIDATE SELECTION ===")
+        print(f"=== NATURAL CANDIDATE SELECTION ===")
         print(f"All candidates:")
         for i, candidate in enumerate(potential_defects):
             print(f"  {i+1}. {candidate['class_name']}: area={candidate['area_percentage']:.1f}%, quality={candidate['quality_score']:.3f}")
         
-        # Find maximum area percentage
-        max_area = max(defect['area_percentage'] for defect in potential_defects)
-
-        # Get candidates within 5% of max area (to handle close areas)
-        area_tolerance = 0.05  # 5% tolerance
+        # Sort by area percentage (primary) and quality score (secondary)
+        potential_defects.sort(key=lambda x: (x['area_percentage'], x['quality_score']), reverse=True)
+        
+        # Check if we have a clear area winner
+        largest_area = potential_defects[0]['area_percentage']
+        area_threshold = largest_area * 0.85  # 15% tolerance for "similar" areas
+        
+        # Get candidates with similar large areas
         large_area_candidates = [
             d for d in potential_defects 
-            if d['area_percentage'] >= max_area * (1 - area_tolerance)
+            if d['area_percentage'] >= area_threshold
         ]
         
-        print(f"Large area candidates (within 15% of max {max_area:.1f}%):")
+        print(f"Large area candidates (within 15% of max {largest_area:.1f}%):")
         for candidate in large_area_candidates:
             print(f"  - {candidate['class_name']}: {candidate['area_percentage']:.1f}%")
         
         if len(large_area_candidates) == 1:
             final_defect = large_area_candidates[0]
-            selection_reason = f"area_dominance ({final_defect['area_percentage']:.1f}%)"
-            print(f"Selected by AREA DOMINANCE: {final_defect['class_name']}")
+            selection_reason = f"clear_area_dominance ({final_defect['area_percentage']:.1f}%)"
+            print(f"Selected by CLEAR AREA DOMINANCE: {final_defect['class_name']}")
         else:
-            # Tie-break by quality score among large area candidates
-            large_area_candidates.sort(key=lambda x: x['quality_score'], reverse=True)
-            final_defect = large_area_candidates[0]
-            selection_reason = f"area+quality (area:{final_defect['area_percentage']:.1f}%, quality:{final_defect['quality_score']:.3f})"
-            print(f"Selected by AREA+QUALITY: {final_defect['class_name']} (best quality among large areas)")
+            # Natural tie-breaking without type priority
+            final_defect = apply_natural_tie_breaking(large_area_candidates)
+            selection_reason = f"natural_selection (area:{final_defect['area_percentage']:.1f}%, quality:{final_defect['quality_score']:.3f})"
+            print(f"Selected by NATURAL SELECTION: {final_defect['class_name']}")
         
         # Process the selected defect
         class_name = final_defect['class_name']
@@ -155,7 +157,7 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
         analysis['detected_defects'].append(class_name)
         
         # Extract single bounding box
-        single_bbox = extract_balanced_bounding_box(
+        single_bbox = extract_natural_bounding_box(
             detection_mask, class_name, h, w, final_defect['confident_pixels'], confidence_scores
         )
         
@@ -173,7 +175,7 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
                 'quality_score': final_defect['quality_score'],
                 'num_regions': 1,
                 'single_defect_per_type': True,
-                'selection_method': 'hybrid_area_quality',
+                'selection_method': 'natural_selection_no_priority',
                 'selection_reason': selection_reason,
                 'area_percentage': final_defect['area_percentage']
             }
@@ -184,14 +186,14 @@ def analyze_defect_predictions_enhanced(predicted_mask, confidence_scores, image
             print(f"   Failed to create bounding box for {class_name}")
             analysis['detected_defects'].remove(class_name)
     
-    print(f"=== HYBRID DETECTION SUMMARY ===")
+    print(f"=== NATURAL DETECTION SUMMARY ===")
     print(f"Detected defects: {analysis['detected_defects']}")
-    print(f"Selection method: Hybrid (area percentage + quality tie-breaking)")
+    print(f"Selection method: Natural selection (no type priority)")
     
     return analysis
 
-def calculate_balanced_quality_score(mask, defect_type, h, w, confidence_scores, pixel_count, confident_pixels):
-    """Calculate balanced quality score with equal opportunity for all defect types"""
+def calculate_natural_quality_score(mask, defect_type, h, w, confidence_scores, pixel_count, confident_pixels):
+    """Calculate natural quality score without type-specific bias"""
     try:
         # Base score from confidence
         if confident_pixels > 0:
@@ -201,90 +203,56 @@ def calculate_balanced_quality_score(mask, defect_type, h, w, confidence_scores,
         else:
             confidence_score = 0.0
         
-        # BALANCED: Uniform area scoring approach
+        # Natural area scoring - same criteria for all types
         area_percentage = (pixel_count / (h * w)) * 100
         
-        # Define universal reasonable ranges
-        if 0.1 < area_percentage < 5:
-            area_score = 1.0  # Small defects
-        elif 5 <= area_percentage < 15:
+        # Universal reasonable ranges (no type bias)
+        if 0.1 < area_percentage < 8:
+            area_score = 1.0  # Small to medium defects
+        elif 8 <= area_percentage < 20:
             area_score = 0.9  # Medium defects
-        elif 15 <= area_percentage < 30:
+        elif 20 <= area_percentage < 35:
             area_score = 0.7  # Large defects
-        elif 30 <= area_percentage < 50:
-            area_score = 0.4  # Very large defects
+        elif 35 <= area_percentage < 50:
+            area_score = 0.5  # Very large defects
         elif area_percentage >= 50:
-            area_score = 0.1  # Extremely large (likely false positive)
+            area_score = 0.2  # Extremely large (likely false positive)
         else:
-            area_score = 0.3  # Very small defects
+            area_score = 0.4  # Very small defects
         
-        # BALANCED: Defect-specific minor adjustments only
-        if defect_type == 'scratch':
-            # Scratches naturally tend to be smaller
-            if area_percentage < 1:
-                area_score *= 1.1  # Slight boost for small scratches
-        elif defect_type == 'damaged':
-            # Damaged areas can legitimately be larger
-            if 15 <= area_percentage < 40:
-                area_score *= 1.1  # Slight boost for larger damaged areas
-        elif defect_type == 'missing_component':
-            # Missing components have moderate expected size
-            if 3 <= area_percentage < 20:
-                area_score *= 1.05  # Small boost for moderate sized missing components
-        elif defect_type == 'open':
-            # Open defects vary widely
-            if 1 <= area_percentage < 25:
-                area_score *= 1.05  # Small boost for reasonable open areas
-        elif defect_type == 'stained':
-            # Stains can vary significantly
-            if 2 <= area_percentage < 35:
-                area_score *= 1.05  # Small boost for reasonable stain areas
-        
-        # Ensure area score doesn't exceed 1.0
-        area_score = min(1.0, area_score)
-        
-        # Spatial distribution score
+        # Spatial distribution score (same for all types)
         y_coords, x_coords = np.where(mask)
         if len(x_coords) > 0:
             # Check if defect is reasonably localized
             x_span = np.max(x_coords) - np.min(x_coords)
             y_span = np.max(y_coords) - np.min(y_coords)
             
-            # BALANCED: Same spatial scoring for all defect types
             spatial_ratio = (x_span / w + y_span / h) / 2
             spatial_score = 1.0 - spatial_ratio
             spatial_score = max(0.1, spatial_score)
         else:
             spatial_score = 0.0
         
-        # BALANCED: Equal weighting for all defect types
+        # Natural weighting (equal treatment for all defect types)
         quality_score = (confidence_score * 0.4 + area_score * 0.4 + spatial_score * 0.2)
         
         return quality_score
         
     except Exception as e:
-        print(f"Error calculating balanced quality score for {defect_type}: {e}")
+        print(f"Error calculating natural quality score for {defect_type}: {e}")
         return 0.0
 
-def is_balanced_defect_candidate(mask, defect_type, h, w, area_percentage):
-    """RELAXED: Defect-specific validation thresholds"""
+def is_natural_defect_candidate(mask, defect_type, h, w, area_percentage):
+    """Natural defect validation without type-specific bias"""
     try:
-        # Define realistic max area for each defect type
-        max_area_thresholds = {
-            'scratch': 95,           # Scratches can cover large surface areas
-            'stained': 90,           # Stains can spread widely  
-            'damaged': 85,           # Damage can affect large portions
-            'open': 70,              # Open defects usually more localized
-            'missing_component': 60   # Missing parts are typically smaller areas
-        }
+        # Universal max area threshold (same for all types)
+        universal_max_area = 80  # 80% for all defect types
         
-        max_area = max_area_thresholds.get(defect_type, 70)  # Default 70%
-        
-        if area_percentage > max_area:
-            print(f"  Rejecting {defect_type}: covers {area_percentage:.1f}% (exceeds {max_area}%)")
+        if area_percentage > universal_max_area:
+            print(f"  Rejecting {defect_type}: covers {area_percentage:.1f}% (exceeds {universal_max_area}%)")
             return False
         
-        # Defect-specific spatial validation
+        # Universal spatial validation
         y_coords, x_coords = np.where(mask)
         if len(x_coords) == 0:
             return False
@@ -292,19 +260,11 @@ def is_balanced_defect_candidate(mask, defect_type, h, w, area_percentage):
         x_span = (np.max(x_coords) - np.min(x_coords)) / w
         y_span = (np.max(y_coords) - np.min(y_coords)) / h
         
-        # Defect-specific span thresholds
-        span_thresholds = {
-            'scratch': 0.98,         # Linear defects can span wide
-            'stained': 0.95,         # Stains can spread across surface
-            'damaged': 0.90,         # Damage can affect large areas
-            'open': 0.85,            # Open defects more contained
-            'missing_component': 0.80 # Missing parts more localized
-        }
+        # Universal span threshold (same for all types)
+        universal_span_threshold = 0.9  # 90% for all defect types
         
-        span_threshold = span_thresholds.get(defect_type, 0.85)
-        
-        if x_span > span_threshold and y_span > span_threshold:
-            print(f"  Rejecting {defect_type}: spans {x_span:.2f}x{y_span:.2f} (exceeds {span_threshold})")
+        if x_span > universal_span_threshold and y_span > universal_span_threshold:
+            print(f"  Rejecting {defect_type}: spans {x_span:.2f}x{y_span:.2f} (exceeds {universal_span_threshold})")
             return False
         
         # Keep minimum size check
@@ -318,16 +278,16 @@ def is_balanced_defect_candidate(mask, defect_type, h, w, area_percentage):
         print(f"Error validating {defect_type}: {e}")
         return False
 
-def apply_balanced_tie_breaking(candidates):
-    """Apply balanced tie-breaking logic when multiple candidates have similar scores"""
+def apply_natural_tie_breaking(candidates):
+    """Apply natural tie-breaking logic without type priority bias"""
     if len(candidates) == 1:
         return candidates[0]
     
-    print(f"  Applying tie-breaking for {len(candidates)} similar candidates...")
+    print(f"  Applying natural tie-breaking for {len(candidates)} similar candidates...")
     
-    # Tie-breaking criteria (in order of priority):
+    # Natural tie-breaking criteria (NO TYPE PRIORITY):
     
-    # 1. Prefer defects with higher confidence
+    # 1. Highest confidence
     max_confidence = max(candidate['confidence_avg'] for candidate in candidates)
     high_confidence_candidates = [c for c in candidates if c['confidence_avg'] >= max_confidence * 0.95]
     
@@ -337,21 +297,20 @@ def apply_balanced_tie_breaking(candidates):
     
     candidates = high_confidence_candidates
     
-    # 2. Prefer defects with reasonable area (not too small, not too large)
-    # Score based on how close to "ideal" area ranges
+    # 2. Most reasonable area size (middle range preferred)
     area_scores = []
     for candidate in candidates:
         area_pct = candidate['area_percentage']
-        # Ideal range is 2-20% for most defects
-        if 2 <= area_pct <= 20:
-            area_score = 1.0
-        elif 1 <= area_pct < 2 or 20 < area_pct <= 30:
-            area_score = 0.8
-        elif 0.5 <= area_pct < 1 or 30 < area_pct <= 40:
-            area_score = 0.6
+        # Prefer moderate sizes (2-15% is often most reliable)
+        if 2 <= area_pct <= 15:
+            area_reasonableness = 1.0
+        elif 1 <= area_pct < 2 or 15 < area_pct <= 25:
+            area_reasonableness = 0.8
+        elif 0.5 <= area_pct < 1 or 25 < area_pct <= 35:
+            area_reasonableness = 0.6
         else:
-            area_score = 0.4
-        area_scores.append(area_score)
+            area_reasonableness = 0.4
+        area_scores.append(area_reasonableness)
     
     max_area_score = max(area_scores)
     best_area_candidates = [candidates[i] for i, score in enumerate(area_scores) if score == max_area_score]
@@ -362,31 +321,21 @@ def apply_balanced_tie_breaking(candidates):
     
     candidates = best_area_candidates
     
-    # 3. Prefer based on defect type priority for ambiguous cases
-    # Priority order: open > damaged > missing_component > scratch > stained
-    type_priority = {
-        'open': 5,
-        'damaged': 4,
-        'missing_component': 3,
-        'scratch': 2,
-        'stained': 1
-    }
+    # 3. Highest quality score
+    candidates.sort(key=lambda x: x['quality_score'], reverse=True)
     
-    highest_priority = max(type_priority.get(c['class_name'], 0) for c in candidates)
-    priority_candidates = [c for c in candidates if type_priority.get(c['class_name'], 0) == highest_priority]
+    if len(candidates) > 1 and candidates[0]['quality_score'] > candidates[1]['quality_score']:
+        print(f"    Tie-broken by quality score: {candidates[0]['class_name']}")
+        return candidates[0]
     
-    if len(priority_candidates) == 1:
-        print(f"    Tie-broken by type priority: {priority_candidates[0]['class_name']}")
-        return priority_candidates[0]
-    
-    # 4. Final fallback: return the first candidate (highest original score)
-    print(f"    Tie-breaking fallback: {candidates[0]['class_name']}")
+    # 4. Final fallback: First candidate (deterministic, no random bias)
+    print(f"    Natural selection: {candidates[0]['class_name']} (highest area + quality)")
     return candidates[0]
 
-def extract_balanced_bounding_box(mask, defect_type, h, w, total_pixels, confidence_scores):
-    """Extract balanced bounding box with consistent approach for all defect types"""
+def extract_natural_bounding_box(mask, defect_type, h, w, total_pixels, confidence_scores):
+    """Extract bounding box using natural approach (same method for all types)"""
     try:
-        print(f"  Extracting balanced bbox for {defect_type}...")
+        print(f"  Extracting natural bbox for {defect_type}...")
         
         # Convert to uint8 if needed
         if mask.dtype != np.uint8:
@@ -403,7 +352,7 @@ def extract_balanced_bounding_box(mask, defect_type, h, w, total_pixels, confide
         
         print(f"  Found {len(x_coords)} defect pixels for {defect_type}")
         
-        # BALANCED: Consistent bounding box calculation for all types
+        # Natural bounding box calculation (same for all types)
         # Use percentiles to avoid outlier pixels
         x_percentile_low = np.percentile(x_coords, 5)
         x_percentile_high = np.percentile(x_coords, 95)
@@ -445,8 +394,8 @@ def extract_balanced_bounding_box(mask, defect_type, h, w, total_pixels, confide
         # Calculate area percentage
         area_percentage = (area / (h * w)) * 100
         
-        # Create balanced bounding box
-        balanced_bbox = {
+        # Create natural bounding box (same structure for all types)
+        natural_bbox = {
             'id': 1,
             'x': min_x, 
             'y': min_y, 
@@ -467,25 +416,25 @@ def extract_balanced_bounding_box(mask, defect_type, h, w, total_pixels, confide
                 'y_percent': (cy / h) * 100,
                 'quadrant': get_quadrant(cx, cy, w, h)
             },
-            'shape_type': classify_defect_shape(width, height, aspect_ratio, compactness, defect_type),
-            'severity': calculate_defect_severity(area_percentage, defect_type),
-            'coverage_type': 'balanced_detection',
+            'shape_type': classify_defect_shape_natural(width, height, aspect_ratio, compactness),
+            'severity': calculate_defect_severity_natural(area_percentage),
+            'coverage_type': 'natural_detection',
             'total_defect_pixels': area,
             'combined_defect': True,
             'single_bbox_per_type': True,
-            'balanced_selection': True,
-            'detection_method': 'balanced_multi_criteria',
+            'natural_selection': True,
+            'detection_method': 'natural_no_priority',
             'coordinates_validated': True,
             'within_image_bounds': True,
             'threshold_used': DEFECT_CONFIDENCE_THRESHOLD
         }
         
-        print(f"  Created balanced bbox for {defect_type}: {width}x{height} at ({min_x},{min_y}) covering {area} pixels ({area_percentage:.2f}%)")
+        print(f"  Created natural bbox for {defect_type}: {width}x{height} at ({min_x},{min_y}) covering {area} pixels ({area_percentage:.2f}%)")
         
-        return balanced_bbox
+        return natural_bbox
         
     except Exception as e:
-        print(f"  Error extracting balanced bbox for {defect_type}: {e}")
+        print(f"  Error extracting natural bbox for {defect_type}: {e}")
         return None
 
 def get_quadrant(x, y, width, height):
@@ -501,76 +450,29 @@ def get_quadrant(x, y, width, height):
     else:
         return "Bottom-Right"
 
-def classify_defect_shape(width, height, aspect_ratio, compactness, defect_type):
-    """Classify the shape characteristics of the defect"""
-    if defect_type == 'open':
-        if aspect_ratio > 3:
-            return "Linear/Gap"
-        elif compactness < 0.3:
-            return "Irregular/Opening"
-        else:
-            return "Hole/Puncture"
-    elif defect_type == 'scratch':
-        if aspect_ratio > 3:
-            return "Linear/Elongated"
-        elif aspect_ratio > 1.5:
-            return "Streak-like"
-        else:
-            return "Widespread"
-    elif defect_type == 'missing_component':
-        if compactness > 0.7:
-            return "Circular/Round"
-        elif aspect_ratio > 2:
-            return "Rectangular/Elongated"
-        else:
-            return "Irregular"
-    elif defect_type == 'stained':
-        if compactness > 0.6:
-            return "Blob-like"
-        else:
-            return "Widespread Stain"
-    elif defect_type == 'damaged':
-        if compactness < 0.3:
-            return "Extensive Damage"
-        else:
-            return "Localized Damage"
+def classify_defect_shape_natural(width, height, aspect_ratio, compactness):
+    """Classify defect shape naturally (same logic for all types)"""
+    if aspect_ratio > 3:
+        return "Linear/Elongated"
+    elif aspect_ratio > 1.8:
+        return "Rectangular/Streak"
+    elif compactness > 0.7:
+        return "Compact/Circular"
+    elif compactness < 0.3:
+        return "Irregular/Distributed"
     else:
-        if compactness > 0.7:
-            return "Compact"
-        elif aspect_ratio > 2:
-            return "Elongated"
-        else:
-            return "Distributed"
+        return "Moderate/Oval"
 
-def calculate_defect_severity(area_percentage, defect_type):
-    """Calculate defect severity based on area percentage and type"""
-    if defect_type == 'open':
-        if area_percentage < 0.5:
-            return 'minor'
-        elif area_percentage < 2.0:
-            return 'moderate'
-        elif area_percentage < 8.0:
-            return 'significant'
-        else:
-            return 'critical'
-    elif defect_type in ['missing_component', 'damaged']:
-        if area_percentage < 0.5:
-            return 'minor'
-        elif area_percentage < 2.0:
-            return 'moderate'
-        elif area_percentage < 5.0:
-            return 'significant'
-        else:
-            return 'critical'
-    else:  # scratch, stained
-        if area_percentage < 1.0:
-            return 'minor'
-        elif area_percentage < 3.0:
-            return 'moderate'
-        elif area_percentage < 8.0:
-            return 'significant'
-        else:
-            return 'critical'
+def calculate_defect_severity_natural(area_percentage):
+    """Calculate defect severity naturally (same logic for all types)"""
+    if area_percentage < 0.5:
+        return 'minor'
+    elif area_percentage < 2.0:
+        return 'moderate'
+    elif area_percentage < 6.0:
+        return 'significant'
+    else:
+        return 'critical'
 
 def analyze_defect_location(bbox, image_shape):
     """Analyze spatial information for defect location"""
@@ -590,7 +492,7 @@ def analyze_defect_location(bbox, image_shape):
             'area_percent': bbox['area_percentage']
         },
         'edge_proximity': analyze_edge_proximity(bbox, image_shape),
-        'balanced_analysis': True,
+        'natural_analysis': True,
         'total_regions_analyzed': 1
     }
     
@@ -634,5 +536,5 @@ def extract_enhanced_bounding_boxes(mask, defect_type):
     
     h, w = mask.shape[:2]
     confidence_scores = np.ones_like(mask, dtype=np.float32)
-    balanced_bbox = extract_balanced_bounding_box(mask, defect_type, h, w, np.sum(mask), confidence_scores)
-    return [balanced_bbox] if balanced_bbox else []
+    natural_bbox = extract_natural_bounding_box(mask, defect_type, h, w, np.sum(mask), confidence_scores)
+    return [natural_bbox] if natural_bbox else []
